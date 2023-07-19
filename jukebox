@@ -1,0 +1,17 @@
+#!/bin/sh
+# remove any old songs
+cd ~/.local/share/.Music/.tmp/dl && rm -n *
+
+# lastfm-stuff
+username=polarhive
+type=recommended
+## options include: mix, library, recommended
+
+id=$(curl -s "https://www.last.fm/player/station/user/${username}/${type}" | jq -r '.playlist[0]._playlinks[0].id')
+yt-dlp --ignore-config $id -f 'ba' -x --add-metadata --restrict-filenames
+
+# mpc-add the last song // (I need to find a better way to do this) :\
+name=$(ls)
+mv -n ${name} .. && cd ..
+mpc -q update && mpc -q insert .tmp/${name}
+notify-send "queueing: $(yt-dlp --get-title $id)"
