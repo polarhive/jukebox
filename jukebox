@@ -1,17 +1,24 @@
 #!/bin/sh
 # remove any old songs
-cd ~/.local/share/.Music/.tmp/dl && rm -n *
+cd ~/.local/share/.Music/.tmp/dl && rm -f *
 
-# lastfm-stuff
+# lastfm
 username=polarhive
 type=recommended
-## options include: mix, library, recommended
 
-id=$(curl -s "https://www.last.fm/player/station/user/${username}/${type}" | jq -r '.playlist[0]._playlinks[0].id')
-yt-dlp --ignore-config $id -f 'ba' -x --add-metadata --restrict-filenames
+# parse json
+response=$(curl -s "https://www.last.fm/player/station/user/${username}/${type}")
+id="$(jq -r '.playlist[0].playlinks[0].id' <<< $response)"
+a="$(jq -r '.playlist[0].artists[0].name' <<< $response)"
+t="$(jq -r '.playlist[0].name' <<< $response)"
 
-# mpc-add the last song // (I need to find a better way to do this) :\
+# ytdl
+yt-dlp "$id" -f 'ba' -x --quiet --ignore-config --restrict-filenames --postprocessor-args "-metadata title='$t' -metadata artist='$a'" || exit
+
+# mpc
 name=$(ls)
-mv -n ${name} .. && cd ..
-mpc -q update && mpc -q insert .tmp/${name}
-notify-send "queueing: $(yt-dlp --get-title $id)"
+mv -n ${name} ~/.local/share/.Music/.tmp
+mpc -q update
+mpc -q add .tmp/${name}
+mpc -q play
+notify-send "queueing: $t — $a"

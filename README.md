@@ -10,17 +10,17 @@ run `./jukebox`
 
 - edit the script to use: your LastFM username
 - choose to play:
-  * recommendations: Listen to recommended music from Last.fm
+  * recommended: Listen to recommended music from Last.fm
   * library: Listen to music you’ve scrobbled before
   * mix: Listen to a mix of music you’ve scrobbled before and recommendations from Last.fm
 
 ---
 ## todo/bugs
 
-- [ ] sanity-check title/artist tags before scrobbling
+- [x] sanity-check title/artist tags before scrobbling
 - [ ] figure your how to `mpc add` songs properly
 - [ ] make the script interactive
-- [ ] fast(er)? yt-dlp fetches
+- [x] fast(er)? yt-dlp fetches
 - [ ] global charts, custom artist/album search
 - [ ] voice-recognition/search via vosk [ref:](https://piped.video/watch?v=zXEvKJl_krY) bugswriter's video
 
