@@ -1,10 +1,13 @@
 #!/bin/sh
-# remove any old songs
-cd ~/.local/share/.Music/.tmp/dl && rm -f *
+set -e
+
+# config
+music_folder="Music"
+cd ~/$music_folder/.tmp/dl
 
 # lastfm
 username=polarhive
-type=recommended
+type=mix
 
 # parse json
 response=$(curl -s "https://www.last.fm/player/station/user/${username}/${type}")
@@ -13,12 +16,14 @@ a="$(jq -r '.playlist[0].artists[0].name' <<< $response)"
 t="$(jq -r '.playlist[0].name' <<< $response)"
 
 # ytdl
-yt-dlp "$id" -f 'ba' -x --quiet --ignore-config --restrict-filenames --postprocessor-args "-metadata title='$t' -metadata artist='$a'" || exit
+yt-dlp --postprocessor-args "ffmpeg":"-metadata title='$t' -metadata artist='$a'" -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || exit 1
 
 # mpc
-name=$(ls)
-mv -n ${name} ~/.local/share/.Music/.tmp
+name=$(ls -u | head -1)
 mpc -q update
-mpc -q add .tmp/${name}
+mpc -q add ".tmp/dl/${name}"
 mpc -q play
+
+# log
+echo "queueing: $t — $a"
 notify-send "queueing: $t — $a"
