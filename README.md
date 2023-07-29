@@ -6,8 +6,6 @@ Play LastFM recommendations on linux: using `mpd(1)`, `yt-dlp(1)` and `bash(1)`
 
 run `./jukebox`
 
-`alias fm="while true; do sleep 1; jukebox; done"`
-
 ## setup
 
 - edit the script to use: your LastFM username
@@ -21,9 +19,10 @@ run `./jukebox`
 
 - [x] sanity-check title/artist tags before scrobbling
 - [x] figure your how to `mpc add` songs properly
-- [ ] make the script interactive
+- [x] make the script interactive
 - [x] fast(er)? yt-dlp fetches
-- [ ] global charts, custom artist/album search
+- [x] custom artist/album search
+- [ ] global charts
 - [ ] voice-recognition/search via vosk [ref:](https://piped.video/watch?v=zXEvKJl_krY) bugswriter's video
 
 ### prerequisites

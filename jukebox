@@ -1,36 +1,85 @@
 #!/bin/sh
-# config
 set -e
-music_folder="Music"
-cd ~/$music_folder/.tmp/dl
-
-# lastfm
 username=polarhive
-type=mix
+mode=mix
+music_folder="Music" && cd ~/$music_folder/.tmp/dl
 
-# cache json
-response=$(curl -s "https://www.last.fm/player/station/user/${username}/${type}")
-length=$(jq -r '.playlist | length' <<< "$response")
+# help?
+usage() {
+    echo "Options:"
+    echo "  -a <artist>: Artist name"
+    echo "  -g <genre>: Genre name"
+    echo "  -h: Display this help message"
+    exit 1
+}
+
+clean() {
+    q=$(echo $q | tr ' ' '+')
+}
+
+# play modes
+play_user() {
+    response=$(curl -s "https://www.last.fm/player/station/user/${username}/${mode}")
+    loop
+}
+
+play_artist() {
+    response=$(curl -s "https://www.last.fm/player/station/music/${q}")
+    loop
+}
+
+play_genre() {
+    response=$(curl -s "https://www.last.fm/player/station/tag/${q}")
+    loop
+}
 
 # queue songs
-for ((i=0; i<length; i++))
-do
-    # parse json
-    id="$(jq -r ".playlist[$i].playlinks[0].id" <<< "$response")"
-    a="$(jq -r ".playlist[$i].artists[0].name" <<< "$response")"
-    t="$(jq -r ".playlist[$i].name" <<< "$response")"
+loop() {
+    length=$(jq -r '.playlist | length' <<< "$response")
+    for ((i=0; i<length; i++))
+    do
+        id="$(jq -r ".playlist[$i].playlinks[0].id" <<< "$response")"
+        a="$(jq -r ".playlist[$i].artists[0].name" <<< "$response")"
+        t="$(jq -r ".playlist[$i].name" <<< "$response")"
+        dl
+    done
+}
 
-    # ytdl
+dl() {
     yt-dlp --postprocessor-args "ffmpeg":"-metadata title='$t' -metadata artist='$a'" -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || break
-
-    # mpc
     rm ~/$music_folder/.tmp/dl/*.part -f
     name=$(ls -u | head -1)
-    mpc -q update
-    mpc -q add ".tmp/dl/${name}"
-    mpc -q play
+    mpc -q update && mpc -q add ".tmp/dl/${name}" && mpc -q play
+    echo "queueing: $t — $a" && notify-send "queueing: $t — $a"
+}
 
-    # log
-    echo "queueing: $t — $a"
-    notify-send "queueing: $t — $a"
+# flags
+while getopts ":a:g:h" opt; do
+    case $opt in
+        a)
+            q="$OPTARG"
+            clean
+            play_artist
+            ;;
+        g)
+            q="$OPTARG"
+            clean
+            play_genre
+            ;;
+        h)
+            usage
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG"
+            usage
+            ;;
+        :)
+            echo "Option -$OPTARG requires an argument."
+            usage
+            ;;
+    esac
 done
+if [ $OPTIND -eq 1 ]; then
+    play_user
+fi
+
