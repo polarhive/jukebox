@@ -57,7 +57,7 @@ loop() {
 }
 
 dl() {
-    yt-dlp --postprocessor-args 'ffmpeg: -metadata title="${t}" -metadata artist="${a}"' -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || notify-send "ERROR: $t — $a" && break
+    yt-dlp --postprocessor-args "ffmpeg: -metadata title='$t' -metadata artist='$a'" -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || notify-send "ERROR: $t — $a" && break
     if [ $? -eq 0 ]; then
         rm ~/$music_folder/.tmp/dl/*.part -f
         name=$(ls -u | head -1)
