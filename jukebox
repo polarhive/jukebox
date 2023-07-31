@@ -17,22 +17,31 @@ clean() {
     q=$(echo $q | tr ' ' '+')
 }
 
+net() {
+    notify-send "network error"
+    exit 1
+}
+
 # play modes
 play_user() {
-    response=$(curl -s "https://www.last.fm/player/station/user/${username}/${mode}")
+    response=$(curl -s "https://www.last.fm/player/station/user/${username}/${mode}") || net
     notify-send "queueing"
     loop
     notify-send "finished queueing"
 }
 
 play_artist() {
-    response=$(curl -s "https://www.last.fm/player/station/music/${q}")
+    response=$(curl -s "https://www.last.fm/player/station/music/${q}") || net
+    notify-send "queueing"
     loop
+    notify-send "finished queueing"
 }
 
 play_genre() {
-    response=$(curl -s "https://www.last.fm/player/station/tag/${q}")
+    response=$(curl -s "https://www.last.fm/player/station/tag/${q}") || net
+    notify-send "queueing"
     loop
+    notify-send "finished queueing"
 }
 
 # queue songs
