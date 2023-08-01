@@ -3,12 +3,15 @@ set -e
 username=polarhive
 mode=mix
 music_folder="Music" && cd ~/$music_folder/.tmp/dl
+yt=false
 
 usage() {
     echo "Options:"
+    echo "  -u: Play user's lastfm mix [default]"
     echo "  -a <artist>: Artist name"
     echo "  -g <genre>: Genre name"
     echo "  -s <song name by artist>: Search a song"
+    echo "  -y: Use yt-music tags for songs [-u mode only]"
     echo "  -h: Display this help message"
     exit 1
 }
@@ -28,6 +31,7 @@ play_user() {
     notify-send "queueing"
     loop
     notify-send "finished queueing"
+    export yt=true
 }
 
 play_artist() {
@@ -52,6 +56,7 @@ play_song() {
 
 # queue songs
 loop() {
+    echo "using yt-music?: $yt"
     length=$(jq -r '.playlist | length' <<< "$response")
     for ((i=0; i<length; i++))
     do
@@ -63,7 +68,12 @@ loop() {
 }
 
 dl() {
-    yt-dlp --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || notify-send "ERROR: $a — $t" && break
+    if [ "$yt" = false ]; then
+        yt-dlp --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || notify-send "ERROR: $a — $t" && break
+    else
+        id=$(yt-dlp --default-search "https://music.youtube.com/search?q=" "$t by $a" --playlist-end 1 --get-id)
+        yt-dlp --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || notify-send "ERROR" && break
+    fi
     queue
 }
 
@@ -75,7 +85,7 @@ queue() {
 }
 
 # flags
-while getopts ":a:g:s:h" opt; do
+while getopts ":a:g:s:yuh" opt; do
     case $opt in
         a)
             q="$OPTARG"
@@ -91,6 +101,13 @@ while getopts ":a:g:s:h" opt; do
             q="$OPTARG"
             play_song
             ;;
+        y)
+            export yt=true
+            play_user
+            ;;
+        u)
+            play_user
+            ;;
         h)
             usage
             ;;
@@ -105,6 +122,7 @@ while getopts ":a:g:s:h" opt; do
     esac
 done
 if [ $OPTIND -eq 1 ]; then
+    export yt=false
     play_user
 fi
 
