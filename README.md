@@ -1,10 +1,19 @@
 # jukebox
 
-Play LastFM recommendations on linux: using `mpd(1)`, `yt-dlp(1)` and `bash(1)`
+Play LastFM recommendations on linux: using [`mpd(1)`](https://man.archlinux.org/man/mpd.1), [`yt-dlp(1)`](https://man.archlinux.org/man/yt-dlp.1) and [`bash(1)`](https://man.archlinux.org/man/bash.1)
 
 ## usage
 
-run `./jukebox`
+``./jukebox``
+```
+Options:
+  -u: Play user's lastfm mix [default]
+  -a <artist>: Artist name
+  -g <genre>: Genre name
+  -s <song name by artist>: Search a song
+  -y: Use yt-music tags for songs [-u mode only]
+  -h: Display this help message
+```
 
 ## setup
 
