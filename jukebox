@@ -4,11 +4,11 @@ username=polarhive
 mode=mix
 music_folder="Music" && cd ~/$music_folder/.tmp/dl
 
-# help?
 usage() {
     echo "Options:"
     echo "  -a <artist>: Artist name"
     echo "  -g <genre>: Genre name"
+    echo "  -s <song name by artist>: Search a song"
     echo "  -h: Display this help message"
     exit 1
 }
@@ -44,6 +44,12 @@ play_genre() {
     notify-send "finished queueing"
 }
 
+play_song() {
+    id=$(yt-dlp --default-search "https://music.youtube.com/search?q=" "$q" --playlist-end 1 --get-id)
+    yt-dlp --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || notify-send "ERROR" && break
+    queue
+}
+
 # queue songs
 loop() {
     length=$(jq -r '.playlist | length' <<< "$response")
@@ -57,17 +63,19 @@ loop() {
 }
 
 dl() {
-    yt-dlp --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || notify-send "ERROR: $t — $a" && break
-    if [ $? -eq 0 ]; then
-        rm ~/$music_folder/.tmp/dl/*.part -f
-        name=$(ls -u | head -1)
-        mpc -q update && mpc -q add ".tmp/dl/${name}" && mpc -q play
-        echo "queueing: $t — $a"
-    fi
+    yt-dlp --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || notify-send "ERROR: $a — $t" && break
+    queue
+}
+
+queue() {
+    rm ~/$music_folder/.tmp/dl/*.part -f
+    name=$(ls -u | head -1)
+    mpc -q update && mpc -q add ".tmp/dl/${name}" && mpc -q play
+    echo "queueing: $a — $t"
 }
 
 # flags
-while getopts ":a:g:h" opt; do
+while getopts ":a:g:s:h" opt; do
     case $opt in
         a)
             q="$OPTARG"
@@ -78,6 +86,10 @@ while getopts ":a:g:h" opt; do
             q="$OPTARG"
             clean
             play_genre
+            ;;
+        s)
+            q="$OPTARG"
+            play_song
             ;;
         h)
             usage
