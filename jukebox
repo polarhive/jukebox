@@ -1,10 +1,16 @@
 #!/bin/sh
+# polarhive.net/jukebox
 set -e
+
+# config
 username=polarhive
 mode=mix
-music_folder="Music" && cd ~/$music_folder/.tmp/dl
-yt=false
 
+# variables
+music_folder="Music" && cd ~/$music_folder/.tmp/dl
+ytargs="--ignore-config -x -q --progress"
+
+# help
 usage() {
     echo "Options:"
     echo "  -u: Play user's lastfm mix [default]"
@@ -16,16 +22,19 @@ usage() {
     exit 1
 }
 
+# santizie input
 clean() {
     q=$(echo $q | tr ' ' '+')
 }
 
+# quit if offline
 net() {
     notify-send "network error"
     exit 1
 }
 
 # play modes
+## play the user's LastFM mix: [default]
 play_user() {
     response=$(curl -s "https://www.last.fm/player/station/user/${username}/${mode}") || net
     notify-send "queueing"
@@ -34,6 +43,7 @@ play_user() {
     export yt=true
 }
 
+## play a specific artist
 play_artist() {
     response=$(curl -s "https://www.last.fm/player/station/music/${q}") || net
     notify-send "queueing"
@@ -41,6 +51,7 @@ play_artist() {
     notify-send "finished queueing"
 }
 
+## play a specific genre
 play_genre() {
     response=$(curl -s "https://www.last.fm/player/station/tag/${q}") || net
     notify-send "queueing"
@@ -48,15 +59,15 @@ play_genre() {
     notify-send "finished queueing"
 }
 
+## play a specified song
 play_song() {
     id=$(yt-dlp --default-search "https://music.youtube.com/search?q=" "$q" --playlist-end 1 --get-id)
-    yt-dlp --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || notify-send "ERROR" && break
+    yt-dlp ${ytargs} --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -f 'ba' -o '%(artist)s - %(title)s.%(ext)s' "$id" || notify-send "ERROR" && break
     queue
 }
 
-# queue songs
+# parse playlist
 loop() {
-    echo "using yt-music?: $yt"
     length=$(jq -r '.playlist | length' <<< "$response")
     for ((i=0; i<length; i++))
     do
@@ -67,16 +78,18 @@ loop() {
     done
 }
 
+# download song
 dl() {
     if [ "$yt" = false ]; then
-        yt-dlp --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || notify-send "ERROR: $a — $t" && break
+        yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -f 'ba' -o "$a - $t.%(ext)s" "$id" || notify-send "ERROR: $a — $t" && break
     else
         id=$(yt-dlp --default-search "https://music.youtube.com/search?q=" "$t by $a" --playlist-end 1 --get-id)
-        yt-dlp --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -f 'ba' -x --ignore-config -q --progress --restrict-filenames "$id" || notify-send "ERROR" && break
+        yt-dlp ${ytargs} --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -f 'ba' -o "$a - $t.%(ext)s" "$id" || notify-send "ERROR" && break
     fi
     queue
 }
 
+# queue last song
 queue() {
     rm ~/$music_folder/.tmp/dl/*.part -f
     name=$(ls -u | head -1)
@@ -106,6 +119,7 @@ while getopts ":a:g:s:yuh" opt; do
             play_user
             ;;
         u)
+            export yt=false
             play_user
             ;;
         h)
@@ -121,6 +135,8 @@ while getopts ":a:g:s:yuh" opt; do
             ;;
     esac
 done
+
+# catch all: [default]
 if [ $OPTIND -eq 1 ]; then
     export yt=false
     play_user
