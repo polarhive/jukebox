@@ -1,0 +1,13 @@
+#!/bin/sh
+# requires an api_key
+api_key=""
+country="india"
+
+response=$(curl -s "https://ws.audioscrobbler.com/2.0/?method=geo.gettoptracks&country=${country}&api_key=${api_key}&format=json")
+length=$(jq -r '.tracks.track | length' <<< "$response")
+for ((i=0; i<length; i++))
+do
+    a="$(jq -r ".tracks.track[$i].artist.name" <<< "$response")"
+    t="$(jq -r ".tracks.track[$i].name" <<< "$response")"
+    ~/.local/bin/jukebox -s "$t by $a"
+done

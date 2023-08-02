@@ -31,7 +31,7 @@ Options:
 - [x] make the script interactive
 - [x] fast(er)? yt-dlp fetches
 - [x] custom artist/album search
-- [ ] global charts
+- [x] global charts
 - [ ] voice-recognition/search via vosk [ref:](https://piped.video/watch?v=zXEvKJl_krY) bugswriter's video
 
 ### prerequisites
