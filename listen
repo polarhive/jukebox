@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# author: suraj@bugswriter.com
+# modifications: mail@polarhive.com
+# upstream: https://github.com/Bugswriter/music_fairy
+
+# variables
+VOSK_MODEL_PATH="$HOME/.local/share/vosk/vosk-model-small-en-in-0.4/"
+
+# speech to text
+ffmpeg -y -f alsa -i default -acodec pcm_s16le -ac 1 -ar 48000 -t 4 -f wav ~/.cache/audio.wav
+vosk-transcriber -m $VOSK_MODEL_PATH -i ~/.cache/audio.wav -o ~/.cache/audio_text.txt
+read audio_input < ~/.cache/audio_text.txt
+
+# pipe into jukebox
+~/.local/repos/jukebox/jukebox -s "$audio_input"
+google_speech "Playing: $audio_input"

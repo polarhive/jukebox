@@ -32,7 +32,7 @@ Options:
 - [x] fast(er)? yt-dlp fetches
 - [x] custom artist/album search
 - [x] global charts
-- [ ] voice-recognition/search via vosk [ref:](https://piped.video/watch?v=zXEvKJl_krY) bugswriter's video
+- [x] voice-recognition/search via vosk [ref:](https://piped.video/watch?v=zXEvKJl_krY) bugswriter's video
 
 ### prerequisites
 
