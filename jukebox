@@ -94,7 +94,7 @@ queue() {
     rm ~/$music_folder/.tmp/dl/*.part -f
     name=$(ls -u | head -1)
     mpc -q update && mpc -q add ".tmp/dl/${name}" && mpc -q play
-    echo "queueing: $a — $t"
+    echo "queueing: $(mpc --format "%artist% — %title%" current)"
 }
 
 # flags
