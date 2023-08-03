@@ -1,13 +1,15 @@
 #!/bin/sh
 # polarhive.net/jukebox
 set -e
+export priority=false
 
 # config
 username=polarhive
 mode=mix
 
 # variables
-music_folder="Music" && cd ~/$music_folder/.tmp/dl
+music_folder="Music"
+cd ~/$music_folder/.tmp/dl
 ytargs="--ignore-config -x -q --progress"
 
 # help
@@ -17,6 +19,7 @@ usage() {
     echo "  -a <artist>: Artist name"
     echo "  -g <genre>: Genre name"
     echo "  -s <song name by artist>: Search a song"
+    echo "  -l Search a song using your voice [vosk]"
     echo "  -y: Use yt-music tags for songs [-u mode only]"
     echo "  -h: Display this help message"
     exit 1
@@ -40,7 +43,6 @@ play_user() {
     notify-send "queueing"
     loop
     notify-send "finished queueing"
-    export yt=true
 }
 
 ## play a specific artist
@@ -63,6 +65,7 @@ play_genre() {
 play_song() {
     id=$(yt-dlp --default-search "https://music.youtube.com/search?q=" "$q" --playlist-end 1 --get-id)
     yt-dlp ${ytargs} --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -f 'ba' -o '%(artist)s - %(title)s.%(ext)s' "$id" || notify-send "ERROR" && break
+    export priority=true
     queue
 }
 
@@ -92,13 +95,28 @@ dl() {
 # queue last song
 queue() {
     rm ~/$music_folder/.tmp/dl/*.part -f
+    mpc -q update
     name=$(ls -u | head -1)
-    mpc -q update && mpc -q add ".tmp/dl/${name}" && mpc -q play
-    echo "queueing: $(mpc --format "%artist% — %title%" current)"
+
+    # insert / add
+    if [ "$priority" = false ]; then
+        mpc -q add ".tmp/dl/${name}"
+        mpc -q play
+    else
+        mpc -q insert ".tmp/dl/${name}"
+        if [ "$(mpc playlist | wc -l)" -eq 0 ]; then
+            mpc -q play
+        else
+            mpc -q play
+            mpc -q next
+        fi
+    export priority=false
+    fi
+    echo "queueing: $name"
 }
 
 # flags
-while getopts ":a:g:s:yuh" opt; do
+while getopts ":a:g:s:yulh" opt; do
     case $opt in
         a)
             q="$OPTARG"
@@ -120,10 +138,14 @@ while getopts ":a:g:s:yuh" opt; do
             ;;
         u)
             export yt=false
+            export priority=false
             play_user
             ;;
         h)
             usage
+            ;;
+        l)
+            ~/.local/repos/jukebox/listen
             ;;
         \?)
             echo "Invalid option: -$OPTARG"
@@ -139,6 +161,7 @@ done
 # catch all: [default]
 if [ $OPTIND -eq 1 ]; then
     export yt=false
+    export priority=false
     play_user
 fi
 
