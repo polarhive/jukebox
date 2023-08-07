@@ -20,4 +20,5 @@ read audio_input < ~/.cache/audio_text.txt
 
 # pipe into jukebox
 google_speech "Searching: $audio_input"
+mpc -q play
 ~/.local/repos/jukebox/jukebox -s "$audio_input"

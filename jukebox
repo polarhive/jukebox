@@ -1,26 +1,27 @@
-#!/bin/sh
+#!/bin/bash
 # polarhive.net/jukebox
 set -e
 export priority=false
+export ytm_backend=false
 
 # config
 username=polarhive
 mode=mix
 
 # variables
-music_folder="Music"
-cd ~/$music_folder/.tmp/dl
-ytargs="--ignore-config -x -q --progress"
+music_folder="Music" && cd ~/$music_folder/.tmp/dl
+ytargs="--ignore-config -x -q --progress --format bestaudio"
 
 # help
 usage() {
     echo "Options:"
-    echo "  -u: Play user's lastfm mix [default]"
     echo "  -a <artist>: Artist name"
     echo "  -g <genre>: Genre name"
     echo "  -s <song name by artist>: Search a song"
-    echo "  -l Search a song using your voice [vosk]"
+    echo "  -l: Search a song using your voice [vosk]"
+    echo "  -c: Play top songs on the LastFM global chart [vosk]"
     echo "  -y: Use yt-music tags for songs [-u mode only]"
+    echo "  -u: Play user's LastFM mix [default]"
     echo "  -h: Display this help message"
     exit 1
 }
@@ -36,109 +37,94 @@ net() {
     exit 1
 }
 
-# play modes
-## play the user's LastFM mix: [default]
 play_user() {
     response=$(curl -s "https://www.last.fm/player/station/user/${username}/${mode}") || net
-    notify-send "queueing"
     loop
-    notify-send "finished queueing"
 }
 
-## play a specific artist
 play_artist() {
     response=$(curl -s "https://www.last.fm/player/station/music/${q}") || net
-    notify-send "queueing"
     loop
-    notify-send "finished queueing"
 }
 
-## play a specific genre
 play_genre() {
     response=$(curl -s "https://www.last.fm/player/station/tag/${q}") || net
-    notify-send "queueing"
     loop
-    notify-send "finished queueing"
 }
 
-## play a specified song
 play_song() {
-    id=$(yt-dlp --default-search "https://music.youtube.com/search?q=" "$q" --playlist-end 1 --get-id)
-    yt-dlp ${ytargs} --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -f 'ba' -o '%(artist)s - %(title)s.%(ext)s' "$id" || notify-send "ERROR" && break
+    export ytm_backend=true
     export priority=true
+    dl
     queue
 }
 
 # parse playlist
 loop() {
+    notify-send "queueing"
     length=$(jq -r '.playlist | length' <<< "$response")
     for ((i=0; i<length; i++))
     do
         id="$(jq -r ".playlist[$i].playlinks[0].id" <<< "$response")"
         a="$(jq -r ".playlist[$i].artists[0].name" <<< "$response")"
         t="$(jq -r ".playlist[$i].name" <<< "$response")"
+        export q="$a - $t"
         dl
+        queue
     done
+    notify-send "finished queueing"
 }
 
 # download song
 dl() {
-    if [ "$yt" = false ]; then
-        yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -f 'ba' -o "$a - $t.%(ext)s" "$id" || notify-send "ERROR: $a — $t" && break
+    if [ "$ytm_backend" = true ]; then
+        yt-dlp ${ytargs} --default-search "https://music.youtube.com/search?q=" "$q" --playlist-end 1 --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s'
     else
-        id=$(yt-dlp --default-search "https://music.youtube.com/search?q=" "$t by $a" --playlist-end 1 --get-id)
-        yt-dlp ${ytargs} --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -f 'ba' -o "$a - $t.%(ext)s" "$id" || notify-send "ERROR" && break
+        yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -o "$a - $t.%(ext)s" "$id"
     fi
-    queue
 }
 
-# queue last song
+# queue song
 queue() {
-    rm ~/$music_folder/.tmp/dl/*.part -f
-    mpc -q update
-    name=$(ls -u | head -1)
-
-    # insert / add
-    if [ "$priority" = false ]; then
-        mpc -q add ".tmp/dl/${name}"
-        mpc -q play
+    if [ $? -ne 0 ]; then
+        notify-send "ERROR: skipping"
     else
-        mpc -q insert ".tmp/dl/${name}"
-        if [ "$(mpc playlist | wc -l)" -eq 0 ]; then
-            mpc -q play
+        rm ~/$music_folder/.tmp/dl/*.part -f && mpc -q update
+        name=$(ls -u | head -1)
+        if [ "$priority" = true ]; then
+            mpc -q insert ".tmp/dl/${name}"
+            if [ "$(mpc playlist | wc -l)" -eq 0 ]; then
+                mpc -q play
+            else
+                mpc -q play && mpc -q next
+            fi
         else
-            mpc -q play
-            mpc -q next
+            mpc -q add ".tmp/dl/${name}" && mpc -q play
         fi
-    export priority=false
+        echo "queueing: $name"
     fi
-    echo "queueing: $name"
 }
 
 # flags
-while getopts ":a:g:s:yulh" opt; do
+while getopts ":a:g:s:yuclh" opt; do
     case $opt in
         a)
-            q="$OPTARG"
-            clean
+            q="$OPTARG" && clean
             play_artist
             ;;
         g)
-            q="$OPTARG"
-            clean
+            q="$OPTARG" && clean
             play_genre
             ;;
         s)
-            q="$OPTARG"
+            export q="$OPTARG"
             play_song
             ;;
         y)
-            export yt=true
+            export ytm_backend=true
             play_user
             ;;
         u)
-            export yt=false
-            export priority=false
             play_user
             ;;
         h)
@@ -147,21 +133,18 @@ while getopts ":a:g:s:yulh" opt; do
         l)
             ~/.local/repos/jukebox/listen
             ;;
+        c)
+            ~/.local/repos/jukebox/charts
+            ;;
         \?)
             echo "Invalid option: -$OPTARG"
             usage
             ;;
         :)
             echo "Option -$OPTARG requires an argument."
-            usage
             ;;
     esac
 done
-
-# catch all: [default]
 if [ $OPTIND -eq 1 ]; then
-    export yt=false
-    export priority=false
     play_user
 fi
-
