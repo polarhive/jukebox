@@ -14,15 +14,17 @@ ytargs="--ignore-config -x -q --progress --format bestaudio"
 
 # help
 usage() {
-    echo "Options:"
-    echo "  -a <artist>: Artist name"
-    echo "  -g <genre>: Genre name"
-    echo "  -s <song name by artist>: Search a song"
-    echo "  -l: Search a song using your voice [vosk]"
-    echo "  -c: Play top songs on the LastFM global chart [vosk]"
-    echo "  -y: Use yt-music tags for songs [-u mode only]"
-    echo "  -u: Play user's LastFM mix [default]"
-    echo "  -h: Display this help message"
+    echo "jukebox -h"
+    echo "  -a: <artist name>"
+    echo "  -g: <genre name>"
+    echo "  -s: <song name>"
+    echo ""
+    echo "  -u: <lastfm: username>"
+    echo "  -m: <lastfm: mix | recommended | library>"
+    echo ""
+    echo "  -l: vosk: uses your mic to search songs"
+    echo "  -y: use ytmusic tags for songs"
+    echo "  -c: top charts in your region (setup your api_key)"
     exit 1
 }
 
@@ -78,7 +80,7 @@ loop() {
 # download song
 dl() {
     if [ "$ytm_backend" = true ]; then
-        yt-dlp ${ytargs} --default-search "https://music.youtube.com/search?q=" "$q" --playlist-end 1 --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s'
+        yt-dlp ${ytargs} --playlist-end 1 --default-search "https://music.youtube.com/search?q=" "$q" --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s'
     else
         yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -o "$a - $t.%(ext)s" "$id"
     fi
@@ -86,10 +88,13 @@ dl() {
 
 # queue song
 queue() {
+    rm ~/$music_folder/.tmp/dl/*.part -f && mpc -q update
+    sleep 0.1
+
     if [ $? -ne 0 ]; then
         notify-send "ERROR: skipping"
+        break
     else
-        rm ~/$music_folder/.tmp/dl/*.part -f && mpc -q update
         name=$(ls -u | head -1)
         if [ "$priority" = true ]; then
             mpc -q insert ".tmp/dl/${name}"
@@ -106,7 +111,7 @@ queue() {
 }
 
 # flags
-while getopts ":a:g:s:yuclh" opt; do
+while getopts ":a:g:s:y:u:m:clh" opt; do
     case $opt in
         a)
             q="$OPTARG" && clean
@@ -125,6 +130,11 @@ while getopts ":a:g:s:yuclh" opt; do
             play_user
             ;;
         u)
+            export username="$OPTARG"
+            play_user
+            ;;
+        m)
+            export mode="$OPTARG"
             play_user
             ;;
         h)

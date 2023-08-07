@@ -7,15 +7,18 @@ Play LastFM recommendations on linux: using [`mpd(1)`](https://man.archlinux.org
 `./jukebox`
 
 ```
-Options:
-  -a <artist>: Artist name
-  -g <genre>: Genre name
-  -s <song name by artist>: Search a song
-  -l: Search a song using your voice [vosk]
-  -c: Play top songs in your country
-  -y: Use yt-music tags for songs [-u mode only]
-  -u: Play user's LastFM mix [default]
-  -h: Display this help message
+jukebox -h
+  -a: <artist name>
+  -g: <genre name>
+  -s: <song name>
+
+  -u: <lastfm: username>
+  -m: <lastfm: mix | recommended | library>
+
+  -l: vosk: uses your mic to search songs
+  -y: use ytmusic tags for songs
+  -c: top charts in your region (setup your api_key)
+
 ```
 
 ## setup:
