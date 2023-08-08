@@ -2,7 +2,7 @@
 
 Play LastFM recommendations on linux: using [`mpd(1)`](https://man.archlinux.org/man/mpd.1), [`yt-dlp(1)`](https://man.archlinux.org/man/yt-dlp.1) and [`bash(1)`](https://man.archlinux.org/man/bash.1)
 
-## usage: [demo](https://polarhive.net/videos/jukebox-demo-lastfm-linux)
+## usage: [demo](https://www.youtube.com/watch?v=k2hNvjDdBRk)
 
 `./jukebox`
 
