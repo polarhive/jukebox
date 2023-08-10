@@ -9,7 +9,7 @@ username=polarhive
 mode=mix
 
 # variables
-music_folder="Music" && cd ~/$music_folder/.tmp/dl
+music_folder=".local/share/.Music" && cd ~/$music_folder/.tmp/dl
 ytargs="--ignore-config -x -q --progress --format bestaudio"
 
 # help
@@ -35,7 +35,7 @@ clean() {
 
 # quit if offline
 net() {
-    notify-send "network error"
+    echo "network error"
     exit 1
 }
 
@@ -63,7 +63,7 @@ play_song() {
 
 # parse playlist
 loop() {
-    notify-send "queueing"
+    echo "queueing"
     length=$(jq -r '.playlist | length' <<< "$response")
     for ((i=0; i<length; i++))
     do
@@ -74,7 +74,7 @@ loop() {
         dl
         queue
     done
-    notify-send "finished queueing"
+    echo "finished queueing"
 }
 
 # download song
@@ -92,8 +92,7 @@ queue() {
     sleep 0.1
 
     if [ $? -ne 0 ]; then
-        notify-send "ERROR: skipping"
-        break
+        echo "ERROR: skipping"
     else
         name=$(ls -u | head -1)
         if [ "$priority" = true ]; then
@@ -111,7 +110,7 @@ queue() {
 }
 
 # flags
-while getopts ":a:g:s:y:u:m:clh" opt; do
+while getopts ":a:g:s:u:m:clhy" opt; do
     case $opt in
         a)
             q="$OPTARG" && clean
