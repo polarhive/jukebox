@@ -46,17 +46,24 @@ curl -fsSL https://tailscale.com/install.sh | sh
 ```
 tailscale ip -6
 ```
+
+#### 5. Open up ports
+
+```
+sudo ufw allow 6600/tcp
+sudo ufw allow 8000/tcp
+```
+
 ---
 #### On your **local** machine:
 
-Connect to your MPD server:
+Connect to your MPD server: make sure tailscale is up and running!
+
 
 ```
 export MPD_HOST='YOUR_IPv6_ADDRESS'
 mpc play
 ```
-
-Make sure tailscale is up and running!
 
 > Replace `YOUR_IPv6_ADDRESS` with your remote machine's IPv6 address.
 

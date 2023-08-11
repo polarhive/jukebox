@@ -50,6 +50,7 @@ jukebox -h
 
 - [charts](charts): LastFM [`$api_key`](https://www.last.fm/api/account/create)
 - [listen](listen): `pip install vosk google-speech` & `pacman -S sox`
+- [stream](stream): Stream songs to your other devices like a phone, laptop or speaker
 
 ---
 This repo is hosted on [Codeberg](https://polarhive.net/jukebox) & mirrored to [GitHub](https://polarhive.net/github) for traffic.
