@@ -58,7 +58,6 @@ play_song() {
     export ytm_backend=true
     export priority=true
     dl
-    queue
 }
 
 # parse playlist
@@ -72,7 +71,6 @@ loop() {
         t="$(jq -r ".playlist[$i].name" <<< "$response")"
         export q="$a - $t"
         dl
-        queue
     done
     echo "finished queueing"
 }
@@ -80,9 +78,9 @@ loop() {
 # download song
 dl() {
     if [ "$ytm_backend" = true ]; then
-        yt-dlp ${ytargs} --playlist-end 1 --default-search "https://music.youtube.com/search?q=" "$q" --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s'
+        yt-dlp ${ytargs} --playlist-end 1 --default-search "https://music.youtube.com/search?q=" "$q" --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s' && queue || echo "ERROR: https://youtu.be/${id}"
     else
-        yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -o "$a - $t.%(ext)s" "$id"
+        yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -o "$a - $t.%(ext)s" "$id" && queue || echo "ERROR: https://youtu.be/${id}"
     fi
 }
 
@@ -90,23 +88,19 @@ dl() {
 queue() {
     rm ~/$music_folder/.tmp/dl/*.part -f && mpc -q update
     sleep 0.1
-
-    if [ $? -ne 0 ]; then
-        echo "ERROR: skipping"
-    else
-        name=$(ls -u | head -1)
-        if [ "$priority" = true ]; then
+    name=$(ls -u | head -1)
+    if [ "$priority" = true ]; then
+        if [ "$(mpc playlist | wc -l)" -eq 0 ]; then
             mpc -q insert ".tmp/dl/${name}"
-            if [ "$(mpc playlist | wc -l)" -eq 0 ]; then
-                mpc -q play
-            else
-                mpc -q play && mpc -q next
-            fi
+            mpc -q play
         else
-            mpc -q add ".tmp/dl/${name}" && mpc -q play
+            mpc -q insert ".tmp/dl/${name}"
+            mpc -q play && mpc -q next
         fi
-        echo "queueing: $name"
+    else
+        mpc -q add ".tmp/dl/${name}"
     fi
+    echo "queueing: $name"
 }
 
 # flags
