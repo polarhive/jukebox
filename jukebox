@@ -22,7 +22,7 @@ usage() {
     echo "  -u: <lastfm: username>"
     echo "  -m: <lastfm: mix | recommended | library>"
     echo ""
-    echo "  -l: vosk: uses your mic to search songs"
+    echo "  -l: vosk: search songs with your voice"
     echo "  -y: use ytmusic tags for songs"
     echo "  -c: top charts in your region (setup your api_key)"
     exit 1

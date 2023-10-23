@@ -11,11 +11,11 @@ jukebox -h
   -a: <artist name>
   -g: <genre name>
   -s: <song name>
-
+  
   -u: <lastfm: username>
   -m: <lastfm: mix | recommended | library>
 
-  -l: vosk: uses your mic to search songs
+  -l: vosk: search songs with your voice
   -y: use ytmusic tags for songs
   -c: top charts in your region (setup your api_key)
 
@@ -23,7 +23,7 @@ jukebox -h
 
 ## setup:
 
-- edit the script to: use your LastFM `$username`
+- edit the script to use your LastFM `$username`
 - choose between:
   * recommended: Listen to recommended music from Last.fm
   * library: Listen to music you’ve scrobbled before
@@ -44,13 +44,14 @@ jukebox -h
 
 - `mpd`, `yt-dlp`, `jq` and optionally `mpdscribble` (to scrobble to LastFM)
 - run `systemctl --user enable --now mpd mpdscribble` at least once before running jukebox
-- read: [foss-music-setup](https://polarhive.net/blog/foss-music-setup) or use my [dotfiles](https://polarhive.net/dots)
+- read: [foss-music-setup](https://polarhive.net/blog/foss-music-setup) / use my [dotfiles](https://polarhive.net/dots)
 
-#### extra:
+### extra:
 
 - [charts](charts): LastFM [`$api_key`](https://www.last.fm/api/account/create)
 - [listen](listen): `pip install vosk google-speech` & `pacman -S sox`
-- [stream](stream): Stream songs to your other devices like a phone, laptop or speaker
+- [stream](docs/snapcast.md): Stream songs to your other devices like a phone, laptop or speaker
+- [phone](docs/phone.md): Copy your current-playlist to your phone: using rsync & adb for offline playback
 
 ---
 This repo is hosted on [Codeberg](https://polarhive.net/jukebox) & mirrored to [GitHub](https://polarhive.net/github) for traffic.
