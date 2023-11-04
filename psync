@@ -9,11 +9,10 @@ fi
 # cleanup
 cd ~/.local/share/.Music/
 rm -rf ~/.cache/songs; mkdir ~/.cache/songs
-rm ~/.local/share/mpd/playlists/songs.m3u; mpc -q save songs; mpc -q clear
+rm ~/.local/share/mpd/playlists/songs.m3u; mpc -q save songs
 adb shell mkdir -p /sdcard/Music
 
 # copy to phone
 rsync -avL --files-from="$HOME/.local/share/mpd/playlists/songs.m3u" ./ ~/.cache/songs
-adb push ~/.cache/songs/* "/sdcard/Music"
-adb push ~/.local/share/mpd/playlists/songs.m3u "/sdcard/Music"
-
+adb push ~/.cache/songs/ "/sdcard/Music"
+adb push ~/.local/share/mpd/playlists/songs.m3u "/sdcard/Music/songs" && mpc -q clear

@@ -93,7 +93,7 @@ dl() {
 
 # queue song
 queue() {
-    mpc -q update
+    mpc -q update; sleep 1
     if [ "$priority" = true ]; then
         name=$(ls -u | head -1); q=$name
         if [ "$(mpc playlist | wc -l)" -eq 0 ]; then
