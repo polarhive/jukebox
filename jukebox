@@ -2,15 +2,15 @@
 # License: GPLv3.0
 # polarhive.net/jukebox
 set -e
+
+# flags
 export priority=false
 export ytm_backend=false
 
 # config
 username=polarhive
 mode=mix
-
-# variables
-music_folder=".local/share/.Music" && cd ~/$music_folder/.tmp/dl
+music_folder=".local/share/.Music" && cd ~/$music_folder/.tmp/dl && rm *.part -f
 ytargs="--ignore-config -x -q --progress --format bestaudio"
 
 # help
@@ -34,7 +34,7 @@ clean() {
 
 # quit if offline
 net() {
-    echo "network error"
+    echo "ERROR: Can't query LastFM"
     exit 1
 }
 
@@ -68,7 +68,7 @@ loop() {
         id="$(jq -r ".playlist[$i].playlinks[0].id" <<< "$response")"
         a="$(jq -r ".playlist[$i].artists[0].name" <<< "$response")"
         t="$(jq -r ".playlist[$i].name" <<< "$response")"
-        export q="$a - $t"
+        q="$a - $t"
         dl
     done
     echo "finished queueing"
@@ -93,9 +93,9 @@ dl() {
 
 # queue song
 queue() {
-    rm ~/$music_folder/.tmp/dl/*.part -f; sleep 0.1; mpc -q update
-    name=$(ls -u | head -1)
+    mpc -q update
     if [ "$priority" = true ]; then
+        name=$(ls -u | head -1); q=$name
         if [ "$(mpc playlist | wc -l)" -eq 0 ]; then
             mpc -q insert ".tmp/dl/${name}"
             mpc -q play
@@ -104,9 +104,9 @@ queue() {
             mpc -q play && mpc -q next
         fi
     else
-        mpc -q add ".tmp/dl/${name}"
+        mpc -q add ".tmp/dl/$q.opus"
     fi
-    echo "queueing: $name"
+    echo "queueing: $q"
 }
 
 # flags

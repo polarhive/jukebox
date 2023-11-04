@@ -11,14 +11,11 @@ jukebox -h
   -a: <artist name>
   -g: <genre name>
   -s: <song name>
-  
   -u: <lastfm: username>
   -m: <lastfm: mix | recommended | library>
-
   -l: vosk: search songs with your voice
   -y: use ytmusic tags for songs
   -c: top charts in your region (setup your api_key)
-
 ```
 
 ## setup:
