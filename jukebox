@@ -21,6 +21,7 @@ usage() {
     echo "  -s: <song name>"
     echo "  -u: <lastfm: username>"
     echo "  -m: <lastfm: mix | recommended | library>"
+    echo "  -p: <lastfm: playlist url>"
     echo "  -l: vosk: search songs with your voice"
     echo "  -y: use ytmusic tags for songs"
     echo "  -c: top charts in your region (setup your api_key)"
@@ -50,6 +51,12 @@ play_artist() {
 
 play_genre() {
     response=$(curl -s "https://www.last.fm/player/station/tag/${q}") || net
+    loop
+}
+
+play_playlist() {
+    q=$(echo "$q" | sed 's/https:\/\/www.last.fm\///')
+    response=$(curl -s "https://www.last.fm/player/station/${q}") || net
     loop
 }
 
@@ -110,7 +117,7 @@ queue() {
 }
 
 # flags
-while getopts ":a:g:s:u:m:clhy" opt; do
+while getopts ":p:a:g:s:u:m:clhy" opt; do
     case $opt in
         a)
             q="$OPTARG" && clean
@@ -119,6 +126,10 @@ while getopts ":a:g:s:u:m:clhy" opt; do
         g)
             q="$OPTARG" && clean
             play_genre
+            ;;
+        p)
+            q="$OPTARG"
+            play_playlist
             ;;
         s)
             export q="$OPTARG"
