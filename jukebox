@@ -10,7 +10,7 @@ export ytm_backend=false
 # config
 username=polarhive
 mode=mix
-music_folder=".local/share/.Music" && cd ~/$music_folder/.tmp/dl && rm *.part -f
+music_folder=".local/share/.Music"; cd ~/$music_folder/dl && rm *.part -f
 ytargs="--ignore-config -x -q --progress --format bestaudio"
 
 # help
@@ -100,18 +100,18 @@ dl() {
 
 # queue song
 queue() {
-    mpc -q update; sleep 1
+    mpc -q update; sleep 0.1
     if [ "$priority" = true ]; then
         name=$(ls -u | head -1); q=$name
         if [ "$(mpc playlist | wc -l)" -eq 0 ]; then
-            mpc -q insert ".tmp/dl/${name}"
+            mpc -q insert "dl/${name}"
             mpc -q play
         else
-            mpc -q insert ".tmp/dl/${name}"
+            mpc -q insert "dl/${name}"
             mpc -q play && mpc -q next
         fi
     else
-        mpc -q add ".tmp/dl/$q.opus"
+        mpc -q add "dl/$q.opus"
     fi
     echo "queueing: $q"
 }
