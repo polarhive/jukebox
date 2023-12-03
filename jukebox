@@ -83,17 +83,21 @@ loop() {
 
 # download song
 dl() {
-    if [ "$ytm_backend" = true ]; then 
-        if yt-dlp ${ytargs} --playlist-end 1 --default-search "https://music.youtube.com/search?q=" "$q" --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s'; then 
-            queue
-        else
-            echo "ERROR: https://youtu.be/${id}"
-        fi
+    if [ -f "$q.opus" ]; then
+        queue
     else
-        if yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -o "$a - $t.%(ext)s" "$id"; then
-            queue
+        if [ "$ytm_backend" = true ]; then 
+            if yt-dlp ${ytargs} --playlist-end 1 --default-search "https://music.youtube.com/search?q=" "$q" --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s'; then 
+                queue
+            else
+                echo "ERROR: https://youtu.be/${id}"
+            fi
         else
-            echo "ERROR: https://youtu.be/${id}"
+            if yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -o "$a - $t.%(ext)s" "$id"; then
+                queue
+            else
+                echo "ERROR: https://youtu.be/${id}"
+            fi
         fi
     fi
 }
