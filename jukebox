@@ -75,7 +75,7 @@ loop() {
         id="$(jq -r ".playlist[$i].playlinks[0].id" <<< "$response")"
         a="$(jq -r ".playlist[$i].artists[0].name" <<< "$response")"
         t="$(jq -r ".playlist[$i].name" <<< "$response")"
-        q="$a - $t"
+        q="${a} - ${t}"
         dl
     done
     echo "finished queueing"
@@ -83,20 +83,16 @@ loop() {
 
 # download song
 dl() {
-    if [ -f "$q.opus" ]; then
+    if [ -f "${q}.opus" ]; then
         queue
     else
         if [ "$ytm_backend" = true ]; then 
-            if yt-dlp ${ytargs} --playlist-end 1 --default-search "https://music.youtube.com/search?q=" "$q" --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s'; then 
-                queue
-            else
-                echo "ERROR: https://youtu.be/${id}"
+            if yt-dlp ${ytargs} --playlist-end 1 --default-search "https://music.youtube.com/search?q=" "${q}" --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s'; then queue
+            else echo "ERROR: https://youtu.be/${id}"
             fi
         else
-            if yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -o "$a - $t.%(ext)s" "$id"; then
-                queue
-            else
-                echo "ERROR: https://youtu.be/${id}"
+            if yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -o "${a} - ${t}.%(ext)s" "$id"; then queue
+            else echo "ERROR: https://youtu.be/${id}"
             fi
         fi
     fi
@@ -115,7 +111,7 @@ queue() {
             mpc -q play && mpc -q next
         fi
     else
-        mpc -q add "dl/$q.opus"
+        mpc -q add "dl/${q}.opus"
     fi
     echo "queueing: $q"
 }
