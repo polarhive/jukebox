@@ -11,7 +11,7 @@ export ytm_backend=false
 username=polarhive
 mode=mix
 music_folder=".local/share/.Music"; cd ~/$music_folder/dl && rm *.part -f
-ytargs="--ignore-config -x -q --progress --format bestaudio"
+ytargs="--ignore-config -x -q --progress --format bestaudio -i --no-warnings --geo-bypass"
 
 # help
 usage() {
@@ -87,12 +87,12 @@ dl() {
         queue
     else
         if [ "$ytm_backend" = true ]; then 
-            if yt-dlp ${ytargs} --playlist-end 1 --default-search "https://music.youtube.com/search?q=" "${q}" --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s'; then queue
-            else echo "ERROR: https://youtu.be/${id}"
+            if yt-dlp "${ytargs}" --playlist-end 1 --default-search "https://music.youtube.com/search?q=" "${q}" --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s'; then
+                queue
             fi
         else
-            if yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -o "${a} - ${t}.%(ext)s" "$id"; then queue
-            else echo "ERROR: https://youtu.be/${id}"
+            if yt-dlp "${ytargs}" --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -o "${a} - ${t}.%(ext)s" "$id"; then
+                queue
             fi
         fi
     fi
