@@ -22,7 +22,7 @@ usage() {
     echo "  -s: <song name>"
     echo "  -u: <lastfm: username>"
     echo "  -m: <lastfm: mix | recommended | library>"
-    echo "  -p: <lastfm: playlist url>"
+    echo "  -p: <lastfm: playlist/album url>"
     echo "  -l: vosk: search songs with your voice"
     echo "  -y: use ytmusic tags for songs"
     echo "  -c: top charts in your region (setup your api_key)"
@@ -61,10 +61,18 @@ play_genre() {
     loop
 }
 
-# play playlist
+# play playlist or album
 play_playlist() {
-    q=$(echo "$q" | sed 's/https:\/\/www.last.fm\///')
-    fetch_lastfm_data "${q}"
+    if [[ $q == *"music"* ]]; then
+        endpoint=$(echo "$q" | sed 's/https:\/\/www.last.fm\/music\///')
+        fetch_lastfm_data "music/${endpoint}"
+    elif [[ $q == *"user"* ]]; then
+        endpoint=$(echo "$q" | sed 's/https:\/\/www.last.fm\/user\///')
+        fetch_lastfm_data "user/${endpoint}"
+    else
+        echo "Unsupported URL format"
+        exit 1
+    fi
     loop
 }
 
