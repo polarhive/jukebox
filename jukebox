@@ -11,142 +11,145 @@ export ytm_backend=false
 # config
 username="polarhive"
 mode="mix"
-music_folder=".local/share/.Music"; cd ~/$music_folder/dl && rm *.part -f
+music_folder=".local/share/.Music"
+cd ~/$music_folder/dl && rm *.part -f
 ytargs="--ignore-config -x -q --progress --format bestaudio -i --geo-bypass"
 
 # help
 usage() {
-    echo "usage: jukebox -h"
-    echo "  -a: <artist name>"
-    echo "  -g: <genre name>"
-    echo "  -s: <song name>"
-    echo "  -u: <lastfm: username>"
-    echo "  -m: <lastfm: mix | recommended | library>"
-    echo "  -p: <lastfm: playlist/album url>"
-    echo "  -l: vosk: search songs with your voice"
-    echo "  -y: use ytmusic tags for songs"
-    echo "  -c: top charts in your region (setup your api_key)"
-    exit 1
+  echo "usage: jukebox -h"
+  echo "  -a: <artist name>"
+  echo "  -g: <genre name>"
+  echo "  -s: <song name>"
+  echo "  -u: <lastfm: username>"
+  echo "  -m: <lastfm: mix | recommended | library>"
+  echo "  -p: <lastfm: playlist/album url>"
+  echo "  -l: vosk: search songs with your voice"
+  echo "  -y: use ytmusic tags for songs"
+  echo "  -c: top charts in your region (setup your api_key)"
+  echo "  -n: copy last played track to your clipboard (setup your api_key)"
+  exit 1
 }
 
 # sanitize input
 clean() {
-    q=$(echo "$q" | tr ' ' '+')
+  q=$(echo "$q" | tr ' ' '+')
 }
 
 # fetch data from Last.fm
 fetch_lastfm_data() {
-    local endpoint="$1"
-    response=$(curl -s "https://www.last.fm/player/station/${endpoint}") || {
-        echo "ERROR: Can't fetch data from LastFM"
-        exit 1
-    }
+  local endpoint="$1"
+  response=$(curl -s "https://www.last.fm/player/station/${endpoint}") || {
+    echo "ERROR: Can't fetch data from LastFM"
+    exit 1
+  }
 }
 
 # play user station
 play_user() {
-    fetch_lastfm_data "user/${username}/${mode}"
-    loop
+  fetch_lastfm_data "user/${username}/${mode}"
+  loop
 }
 
 # play artist station
 play_artist() {
-    fetch_lastfm_data "music/${q}"
-    loop
+  fetch_lastfm_data "music/${q}"
+  loop
 }
 
 # play genre station
 play_genre() {
-    fetch_lastfm_data "tag/${q}"
-    loop
+  fetch_lastfm_data "tag/${q}"
+  loop
 }
 
 # play playlist or album
 play_playlist() {
-    if [[ $q == *"music"* ]]; then
-        endpoint=$(echo "$q" | sed 's/https:\/\/www.last.fm\/music\///')
-        fetch_lastfm_data "music/${endpoint}"
-    elif [[ $q == *"user"* ]]; then
-        endpoint=$(echo "$q" | sed 's/https:\/\/www.last.fm\/user\///')
-        fetch_lastfm_data "user/${endpoint}"
-    else
-        echo "Unsupported URL format"
-        exit 1
-    fi
-    loop
+  if [[ $q == *"music"* ]]; then
+    endpoint=$(echo "$q" | sed 's/https:\/\/www.last.fm\/music\///')
+    fetch_lastfm_data "music/${endpoint}"
+  elif [[ $q == *"user"* ]]; then
+    endpoint=$(echo "$q" | sed 's/https:\/\/www.last.fm\/user\///')
+    fetch_lastfm_data "user/${endpoint}"
+  else
+    echo "Unsupported URL format"
+    exit 1
+  fi
+  loop
 }
 
 # play song
 play_song() {
-    export ytm_backend=true
-    export priority=true
-    dl
+  export ytm_backend=true
+  export priority=true
+  dl
 }
 
 # parse playlist
 loop() {
-    length=$(jq -r '.playlist | length' <<< "$response")
-    echo "queueing: $length song(s)"
-    for ((i=0; i<length; i++)); do
-        id=$(jq -r ".playlist[$i].playlinks[0].id" <<< "$response")
-        a=$(jq -r ".playlist[$i].artists[0].name" <<< "$response")
-        t=$(jq -r ".playlist[$i].name" <<< "$response")
-        q="${a} - ${t}"
-        dl
-    done
-    echo "finished queueing!"
+  length=$(jq -r '.playlist | length' <<<"$response")
+  echo "queueing: $length song(s)"
+  for ((i = 0; i < length; i++)); do
+    id=$(jq -r ".playlist[$i].playlinks[0].id" <<<"$response")
+    a=$(jq -r ".playlist[$i].artists[0].name" <<<"$response")
+    t=$(jq -r ".playlist[$i].name" <<<"$response")
+    q="${a} - ${t}"
+    dl
+  done
+  echo "finished queueing!"
 }
 
 # download song
 dl() {
-    if [ -f "${q}.opus" ]; then
-        queue
+  if [ -f "${q}.opus" ]; then
+    queue
+  else
+    if [ "$ytm_backend" = true ]; then
+      yt-dlp ${ytargs} --playlist-end 1 --default-search "https://music.youtube.com/search?q=" "${q}" --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s' 2>/dev/null && queue
     else
-        if [ "$ytm_backend" = true ]; then
-            yt-dlp ${ytargs} --playlist-end 1 --default-search "https://music.youtube.com/search?q=" "${q}" --parse-metadata "title:%(title)s" --parse-metadata "artist:%(artist)s" --add-metadata -o '%(artist)s - %(title)s.%(ext)s' 2>/dev/null && queue
-        else
-            yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -o "${a} - ${t}.%(ext)s" "$id" 2>/dev/null && queue
-        fi
+      yt-dlp ${ytargs} --postprocessor-args "ffmpeg:-metadata title=${t@Q} -metadata artist=${a@Q}" -o "${a} - ${t}.%(ext)s" "$id" 2>/dev/null && queue
     fi
+  fi
 }
 
 # queue song
 queue() {
-    mpc -q update; sleep 0.1
-    if [ "$priority" = true ]; then
-        name=$(ls -u | head -1)
-        q=$name
-        if [ "$(mpc playlist | wc -l)" -eq 0 ]; then
-            mpc -q insert "dl/${name}"
-            mpc -q play
-        else
-            mpc -q insert "dl/${name}"
-            mpc -q play && mpc -q next
-        fi
+  mpc -q update
+  sleep 0.1
+  if [ "$priority" = true ]; then
+    name=$(ls -u | head -1)
+    q=$name
+    if [ "$(mpc playlist | wc -l)" -eq 0 ]; then
+      mpc -q insert "dl/${name}"
+      mpc -q play
     else
-        mpc -q add "dl/${q}.opus"
+      mpc -q insert "dl/${name}"
+      mpc -q play && mpc -q next
     fi
-    echo "queueing: $q"
+  else
+    mpc -q add "dl/${q}.opus"
+  fi
+  echo "queueing: $q"
 }
 
 # flags
-while getopts ":p:a:g:s:u:m:clhy" opt; do
-    case $opt in
-        a) q="$OPTARG" && clean && play_artist ;;
-        g) q="$OPTARG" && clean && play_genre ;;
-        p) q="$OPTARG" && play_playlist ;;
-        s) q="$OPTARG" && play_song ;;
-        y) export ytm_backend=true && play_user ;;
-        u) export username="$OPTARG" && play_user ;;
-        m) export mode="$OPTARG" && play_user ;;
-        h) usage ;;
-        l) ~/.local/repos/jukebox/listen ;;
-        c) ~/.local/repos/jukebox/charts ;;
-        \?) echo "Invalid option: -$OPTARG" && usage ;;
-        :) echo "Option -$OPTARG requires an argument." && usage ;;
-    esac
+while getopts ":p:a:g:s:u:m:clnhy" opt; do
+  case $opt in
+  a) q="$OPTARG" && clean && play_artist ;;
+  g) q="$OPTARG" && clean && play_genre ;;
+  p) q="$OPTARG" && play_playlist ;;
+  s) q="$OPTARG" && play_song ;;
+  y) export ytm_backend=true && play_user ;;
+  u) export username="$OPTARG" && play_user ;;
+  m) export mode="$OPTARG" && play_user ;;
+  h) usage ;;
+  l) ~/.local/repos/jukebox/listen ;;
+  c) ~/.local/repos/jukebox/charts ;;
+  n) ~/.local/repos/jukebox/now ;;
+  \?) echo "Invalid option: -$OPTARG" && usage ;;
+  :) echo "Option -$OPTARG requires an argument." && usage ;;
+  esac
 done
 if [ $OPTIND -eq 1 ]; then
-    play_user
+  play_user
 fi
-
