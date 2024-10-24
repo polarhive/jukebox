@@ -15,8 +15,19 @@ def main():
         print(f"ERROR: Can't connect to MPD server: {e}")
         sys.exit(1)
 
+    config_path_user = os.path.expanduser("~/.config/jukebox-fm/config.toml")
+    config_path_default = "config.toml"
+
     try:
-        config = load("config.toml")
+        if os.path.exists(config_path_user):
+            config = load(config_path_user)
+        elif os.path.exists(config_path_default):
+            config = load(config_path_default)
+        else:
+            print("ERROR: No configuration file found.")
+            client.disconnect()
+            sys.exit(1)
+
         music_folder = os.path.expanduser(config['music']['music_folder'])
         username = config['lastfm']['username']
         mode = config['lastfm']['mode']
@@ -25,7 +36,6 @@ def main():
         client.disconnect()
         sys.exit(1)
 
-    # map config
     ydl_config = {
         'format': config['yt_dlp']['format'],
         'quiet': 'True',

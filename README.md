@@ -2,4 +2,8 @@
 
 Play LastFM music recommendations using: mpd, yt-dlp and python
 
-> !wip: python rewrite
+## Install
+
+```
+pip install git+https://github.com/polarhive/jukebox
+```
