@@ -7,11 +7,13 @@ from yt_dlp import YoutubeDL
 from mpd import MPDClient
 
 def main():
+    client = MPDClient()
+
     try:
-        client = MPDClient()
         client.connect('localhost', 6600)
     except Exception as e:
-        print(f"ERROR: Can't connect to MPD server: {e}"); sys.exit(1)
+        print(f"ERROR: Can't connect to MPD server: {e}")
+        sys.exit(1)
 
     try:
         config = load("config.toml")
@@ -19,7 +21,9 @@ def main():
         username = config['lastfm']['username']
         mode = config['lastfm']['mode']
     except KeyError as e:
-        print(f"ERROR: Missing configuration key: {e}"); sys.exit(1)
+        print(f"ERROR: Missing configuration key: {e}")
+        client.disconnect()
+        sys.exit(1)
 
     # map config
     ydl_config = {
@@ -32,15 +36,20 @@ def main():
         'postprocessors': [
             {
                 'key': 'FFmpegExtractAudio',
-                # 'preferredcodec': config['yt_dlp']['preferred_codec'],
                 'preferredquality': config['yt_dlp']['preferred_quality'],
             },
             {'key': 'FFmpegMetadata'}
         ],
     }
 
-    fetch_lastfm_data(username, mode, client, music_folder, ydl_config)
-    client.disconnect()
+    try:
+        fetch_lastfm_data(username, mode, client, music_folder, ydl_config)
+    except KeyboardInterrupt:
+        print("\nInterrupted by user. Exiting...")
+    except Exception as e:
+        print(f"ERROR: An unexpected error occurred: {e}")
+    finally:
+        client.disconnect()
 
 def fetch_lastfm_data(username, mode, client, music_folder, ydl_config):
     url = f"https://www.last.fm/player/station/user/{username}/{mode}"
@@ -68,11 +77,35 @@ def fetch_lastfm_data(username, mode, client, music_folder, ydl_config):
 
         print(f"Fetched: {len(parsed_tracks)} tracks")
         for artist, title, playlink_id in parsed_tracks:
-            download_and_queue_song(artist, title, playlink_id, client, music_folder, ydl_config)
+            if is_track_in_library(artist, title, client):
+                queue_song(artist, title, client)
+            else:
+                download_and_queue_song(artist, title, playlink_id, client, music_folder, ydl_config)
 
     except requests.RequestException as e:
         print(f"ERROR: Can't fetch data from LastFM: {e}")
         sys.exit(1)
+
+def is_track_in_library(artist, title, client):
+    try:
+        library = client.listallinfo()
+        for song in library:
+            if 'artist' in song and 'title' in song:
+                if song['artist'] == artist and song['title'] == title:
+                    return True
+    except Exception as e:
+        print(f"ERROR: Could not check library: {e}")
+    return False
+
+def queue_song(artist, title, client):
+    song = f"{artist} - {title}"
+    try:
+        client.update('dl')
+        sleep(0.1)
+        client.add(f"dl/{song}.opus")  # Assuming the format is .opus
+        print(f"Queued: {song}")
+    except Exception as e:
+        print(f"ERROR: Could not queue song '{song}': {e}")
 
 def download_and_queue_song(artist, title, playlink_id, client, music_folder, ydl_config):
     youtube_url = f"https://www.youtube.com/watch?v={playlink_id}"
@@ -86,13 +119,14 @@ def download_and_queue_song(artist, title, playlink_id, client, music_folder, yd
     }
 
     with YoutubeDL(ydl_opts) as ydl:
+        song = f"{artist} - {title}"
+
         try:
             ydl.download([youtube_url])
-            song = f"{artist} - {title}"
             client.update('dl')
             sleep(0.1)
             client.add(f"dl/{song}.opus")
-            print(f"Queueing: {song}")
+            print(f"Downloaded and queued: {song}")
 
         except Exception as e:
             print(f"ERROR: Could not download or queue song '{song}': {e}")

@@ -6,10 +6,9 @@ username = "polarhive"
 mode = "mix"
 
 [yt_dlp]
-format = "bestaudio"
+format = "opus/bestaudio"
 noplaylist = true
 quiet = true
 geo_bypass = true
 outtmpl = "%(artist)s - %(title)s"
-preferred_codec = "opus"
-preferred_quality = "128"
+preferred_quality = "64"
