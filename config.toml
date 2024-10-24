@@ -1,13 +1,15 @@
 [music]
 music_folder = "~/.local/share/.Music/dl"
 
+[lastfm]
+username = "polarhive"
+mode = "mix"
+
 [yt_dlp]
 format = "bestaudio"
 noplaylist = true
 quiet = true
 geo_bypass = true
 outtmpl = "%(artist)s - %(title)s"
-
-[lastfm]
-username = "polarhive"
-mode = "mix"
+preferred_codec = "opus"
+preferred_quality = "128"
