@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jukebox-fm"
+version = "0.1.0"
+description = "Play LastFM music recommendations using: mpd, yt-dlp and python"
+readme = "README.md"
+authors = [
+    { name = "Nathan Paul", email = "mail@polarhive.net" }
+]
+license = { text = "GPLv3" }
+keywords = ["mpd", "lastfm", "music", "yt-dlp"]
+
+dependencies = [
+    "requests",
+    "yt-dlp",
+    "toml",
+    "python-mpd2"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+jukebox = "jukebox.main:main"

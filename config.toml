@@ -11,4 +11,4 @@ noplaylist = true
 quiet = true
 geo_bypass = true
 outtmpl = "%(artist)s - %(title)s"
-preferred_quality = "64"
+preferred_quality = "192"
