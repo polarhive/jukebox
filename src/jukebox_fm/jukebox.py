@@ -6,6 +6,7 @@ from toml import load, dump
 from yt_dlp import YoutubeDL
 from mpd import MPDClient
 from argparse import ArgumentParser
+client = MPDClient()
 
 def main():
     parser = ArgumentParser(description="Welcome to jukebox")
@@ -14,11 +15,11 @@ def main():
     parser.add_argument("-p", "--playlist", help="Play a specified playlist")
     parser.add_argument("-u", "--username", help="Custom LastFM username", default=None)
     parser.add_argument("-m", "--mode", help="Custom LastFM mode", default=None)
+    parser.add_argument("-f", "--friends_file", help="Path to the file LastFM usernames")
     args = parser.parse_args()
 
     # load toml config
     config_path_user = path.expanduser("~/.config/jukebox-fm/config.toml")
-    client = MPDClient()
 
     # ifnot? create a default one
     if not path.exists(config_path_user):
@@ -39,8 +40,6 @@ def main():
     if args.artist: endpoint = f"music/{args.artist}"
     elif args.genre: endpoint = f"tag/{args.genre}"
     elif args.playlist: endpoint = f"user/{username}/playlist/{args.playlist}"
-    else: endpoint = f"user/{username}/{mode}"
-
     try:
         client.connect('localhost', 6600)
         ydl_config = {
@@ -55,10 +54,16 @@ def main():
                 {'key': 'FFmpegMetadata'}
             ],
         }
-        fetch_lastfm_data(endpoint, client, music_folder, ydl_config)
-
+        if args.friends_file:
+            friends = load_friends(args.friends_file);
+            for username in friends: fetch_lastfm_data(f"user/{username}/{mode}", music_folder, ydl_config)
+        else: 
+            endpoint=f"user/{username}/{mode}"
+            fetch_lastfm_data(endpoint, music_folder, ydl_config)
+            
     except KeyboardInterrupt: print("\n[QUIT] Interrupted by user")
     except Exception as e: print(f"ERROR: {e}")
+    
     finally: client.disconnect()
 
 def create_default_config(config_path):
@@ -86,7 +91,13 @@ def create_default_config(config_path):
         print(f"ERROR: Could not create default configuration file: {e}")
         exit(1)
 
-def fetch_lastfm_data(endpoint, client, music_folder, ydl_config):
+def load_friends(friends_file):
+    try:
+        with open(friends_file, 'r') as file: friends = [line.strip() for line in file if line.strip()]
+        return friends
+    except Exception as e: print(f"ERROR: Could not read friends file: {e}"); exit(1)
+
+def fetch_lastfm_data(endpoint, music_folder, ydl_config):
     url = f"https://www.last.fm/player/station/{endpoint}"
     try:
         response = requests.get(url)
@@ -112,16 +123,14 @@ def fetch_lastfm_data(endpoint, client, music_folder, ydl_config):
 
         print(f"Fetched: {len(parsed_tracks)} tracks")
         for artist, title, playlink_id in parsed_tracks:
-            if is_track_in_library(artist, title, client):
-                queue_song(artist, title, client)
-            else:
-                download_and_queue_song(artist, title, playlink_id, client, music_folder, ydl_config)
+            if is_track_in_library(artist, title): queue_song(f"{artist} - {title}")
+            else: download_song(artist, title, playlink_id, music_folder, ydl_config)
 
     except requests.RequestException as e:
         print(f"ERROR: Can't fetch data from LastFM: {e}")
         exit(1)
 
-def is_track_in_library(artist, title, client):
+def is_track_in_library(artist, title):
     try:
         library = client.listallinfo()
         for song in library:
@@ -132,8 +141,7 @@ def is_track_in_library(artist, title, client):
         print(f"ERROR: Could not check library: {e}")
     return False
 
-def queue_song(artist, title, client):
-    song = f"{artist} - {title}"
+def queue_song(song):
     try:
         client.update('dl')
         sleep(0.1)
@@ -142,7 +150,7 @@ def queue_song(artist, title, client):
     except Exception as e:
         print(f"ERROR: Could not queue song '{song}': {e}")
 
-def download_and_queue_song(artist, title, playlink_id, client, music_folder, ydl_config):
+def download_song(artist, title, playlink_id, music_folder, ydl_config):
     youtube_url = f"https://www.youtube.com/watch?v={playlink_id}"
     ydl_opts = {
         **ydl_config,
@@ -155,13 +163,10 @@ def download_and_queue_song(artist, title, playlink_id, client, music_folder, yd
 
     with YoutubeDL(ydl_opts) as ydl:
         song = f"{artist} - {title}"
-
         try:
             ydl.download([youtube_url])
             try:
-                client.update('dl')
-                sleep(0.1)
-                client.add(f"dl/{song}.opus")
+                queue_song(song)
                 print(f"Downloaded and queued: {song}")
             except Exception as e:
                 print(f"ERROR: Could not queue song '{song}': {e}")
