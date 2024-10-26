@@ -1,6 +1,6 @@
 [project]
 name = "jukebox-fm"
-version = "0.1.0"
+version = "0.2.0"
 description = "Play LastFM music recommendations using: mpd, yt-dlp and python"
 keywords = ["mpd", "lastfm", "music", "yt-dlp"]
 readme = "README.md"
@@ -12,7 +12,7 @@ classifiers = [
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Programming Language :: Python :: 3",
     "Topic :: Multimedia :: Sound/Audio :: Players",
-    "Operating System :: OS Independent",
+    "Operating System :: Linux",
 ]
 
 dependencies = [
