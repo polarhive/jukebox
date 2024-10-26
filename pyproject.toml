@@ -2,12 +2,18 @@
 name = "jukebox-fm"
 version = "0.1.0"
 description = "Play LastFM music recommendations using: mpd, yt-dlp and python"
+keywords = ["mpd", "lastfm", "music", "yt-dlp"]
 readme = "README.md"
 authors = [
     { name = "Nathan Paul", email = "mail@polarhive.net" }
 ]
-license = { text = "GPLv3" }
-keywords = ["mpd", "lastfm", "music", "yt-dlp"]
+license = { file = "LICENSE" }
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio :: Players",
+    "Operating System :: OS Independent",
+]
 
 dependencies = [
     "requests",
@@ -16,8 +22,13 @@ dependencies = [
     "python-mpd2"
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+
+[project.urls]
+Homepage = "https://github.com/polarhive/jukebox"
+Issues = "https://github.com/polarhive/jukebox/issues"
+
+[tool.setuptools]
+packages = { find = { where = ["src"] } }
 
 [project.scripts]
-jukebox-fm = "jukebox_fm.main:main"
+jukebox-fm = "jukebox_fm.jukebox:main"
