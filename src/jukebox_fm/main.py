@@ -1,68 +1,93 @@
-import os
-import sys
 import requests
+from os import path, makedirs
+from sys import exit
 from time import sleep
-from toml import load
+from toml import load, dump
 from yt_dlp import YoutubeDL
 from mpd import MPDClient
+from argparse import ArgumentParser
 
 def main():
+    parser = ArgumentParser(description="Welcome to jukebox")
+    parser.add_argument("-a", "--artist", help="Play a particular artist")
+    parser.add_argument("-g", "--genre", help="Play a specified genre")
+    parser.add_argument("-p", "--playlist", help="Play a specified playlist")
+    parser.add_argument("-u", "--username", help="Custom LastFM username", default=None)
+    parser.add_argument("-m", "--mode", help="Custom LastFM mode", default=None)
+    args = parser.parse_args()
+
+    # load toml config
+    config_path_user = path.expanduser("~/.config/jukebox-fm/config.toml")
     client = MPDClient()
+
+    # ifnot? create a default one
+    if not path.exists(config_path_user):
+        create_default_config(config_path_user)
+
+    try:
+        if path.exists(config_path_user): config = load(config_path_user)
+        else: print("ERROR: No configuration file found."); exit(1)
+
+        # mapping
+        music_folder = path.expanduser(config['music']['music_folder'])
+        username = args.username if args.username else config['lastfm']['username']
+        mode = args.mode if args.mode else config['lastfm']['mode']
+
+    except KeyError as e: print(f"ERROR: Missing configuration key: {e}"); exit(1)
+
+    # set endpoints
+    if args.artist: endpoint = f"music/{args.artist}"
+    elif args.genre: endpoint = f"tag/{args.genre}"
+    elif args.playlist: endpoint = f"user/{username}/playlist/{args.playlist}"
+    else: endpoint = f"user/{username}/{mode}"
 
     try:
         client.connect('localhost', 6600)
-    except Exception as e:
-        print(f"ERROR: Can't connect to MPD server: {e}")
-        sys.exit(1)
+        ydl_config = {
+            'format': config['yt_dlp']['format'],
+            'quiet': True,
+            'noprogress': config['yt_dlp']['quiet'],
+            'noplaylist': config['yt_dlp']['noplaylist'],
+            'geo_bypass': config['yt_dlp']['geo_bypass'],
+            'outtmpl': path.join(music_folder, config['yt_dlp']['outtmpl']),
+            'postprocessors': [
+                {'key': 'FFmpegExtractAudio', 'preferredquality': config['yt_dlp']['preferred_quality']},
+                {'key': 'FFmpegMetadata'}
+            ],
+        }
+        fetch_lastfm_data(endpoint, client, music_folder, ydl_config)
 
-    config_path_user = os.path.expanduser("~/.config/jukebox-fm/config.toml")
-    config_path_default = "config.toml"
+    except KeyboardInterrupt: print("\n[QUIT] Interrupted by user")
+    except Exception as e: print(f"ERROR: {e}")
+    finally: client.disconnect()
 
-    try:
-        if os.path.exists(config_path_user):
-            config = load(config_path_user)
-        elif os.path.exists(config_path_default):
-            config = load(config_path_default)
-        else:
-            print("ERROR: No configuration file found.")
-            client.disconnect()
-            sys.exit(1)
+def create_default_config(config_path):
+    config_dir = path.dirname(config_path)
+    try: makedirs(config_dir, exist_ok=True)
+    except Exception as e: print(f"ERROR: Could not create configuration directory: {e}"); exit(1)
 
-        music_folder = os.path.expanduser(config['music']['music_folder'])
-        username = config['lastfm']['username']
-        mode = config['lastfm']['mode']
-    except KeyError as e:
-        print(f"ERROR: Missing configuration key: {e}")
-        client.disconnect()
-        sys.exit(1)
-
-    ydl_config = {
-        'format': config['yt_dlp']['format'],
-        'quiet': 'True',
-        'noprogress': config['yt_dlp']['quiet'],
-        'noplaylist': config['yt_dlp']['noplaylist'],
-        'geo_bypass': config['yt_dlp']['geo_bypass'],
-        'outtmpl': os.path.join(music_folder, config['yt_dlp']['outtmpl']),
-        'postprocessors': [
-            {
-                'key': 'FFmpegExtractAudio',
-                'preferredquality': config['yt_dlp']['preferred_quality'],
-            },
-            {'key': 'FFmpegMetadata'}
-        ],
+    default_config = {
+        'music': {'music_folder': '~/Music/dl'},
+        'lastfm': {'username': 'lastfm', 'mode': 'mix'},
+        'yt_dlp': {
+            'format': 'opus/bestaudio',
+            'quiet': True,
+            'noplaylist': True,
+            'geo_bypass': True,
+            'outtmpl': '%(artist)s - %(title)s',
+            'preferred_quality': '192'
+        }
     }
-
     try:
-        fetch_lastfm_data(username, mode, client, music_folder, ydl_config)
-    except KeyboardInterrupt:
-        print("\nInterrupted by user. Exiting...")
+        with open(config_path, 'w') as config_file:
+            dump(default_config, config_file)
+        print(f"Created default configuration file at {config_path}")
     except Exception as e:
-        print(f"ERROR: An unexpected error occurred: {e}")
-    finally:
-        client.disconnect()
+        print(f"ERROR: Could not create default configuration file: {e}")
+        exit(1)
 
-def fetch_lastfm_data(username, mode, client, music_folder, ydl_config):
-    url = f"https://www.last.fm/player/station/user/{username}/{mode}"
+def fetch_lastfm_data(endpoint, client, music_folder, ydl_config):
+    url = f"https://www.last.fm/player/station/{endpoint}"
     try:
         response = requests.get(url)
         response.raise_for_status()
@@ -94,7 +119,7 @@ def fetch_lastfm_data(username, mode, client, music_folder, ydl_config):
 
     except requests.RequestException as e:
         print(f"ERROR: Can't fetch data from LastFM: {e}")
-        sys.exit(1)
+        exit(1)
 
 def is_track_in_library(artist, title, client):
     try:
@@ -112,7 +137,7 @@ def queue_song(artist, title, client):
     try:
         client.update('dl')
         sleep(0.1)
-        client.add(f"dl/{song}.opus")  # Assuming the format is .opus
+        client.add(f"dl/{song}.opus")
         print(f"Queued: {song}")
     except Exception as e:
         print(f"ERROR: Could not queue song '{song}': {e}")
@@ -125,7 +150,7 @@ def download_and_queue_song(artist, title, playlink_id, client, music_folder, yd
             '-metadata', f'title={title}',
             '-metadata', f'artist={artist}',
         ],
-        'outtmpl': os.path.join(music_folder, f'{artist} - {title}'),
+        'outtmpl': path.join(music_folder, f'{artist} - {title}'),
     }
 
     with YoutubeDL(ydl_opts) as ydl:
@@ -133,13 +158,15 @@ def download_and_queue_song(artist, title, playlink_id, client, music_folder, yd
 
         try:
             ydl.download([youtube_url])
-            client.update('dl')
-            sleep(0.1)
-            client.add(f"dl/{song}.opus")
-            print(f"Downloaded and queued: {song}")
-
+            try:
+                client.update('dl')
+                sleep(0.1)
+                client.add(f"dl/{song}.opus")
+                print(f"Downloaded and queued: {song}")
+            except Exception as e:
+                print(f"ERROR: Could not queue song '{song}': {e}")
         except Exception as e:
-            print(f"ERROR: Could not download or queue song '{song}': {e}")
+            print(f"ERROR: Could not download song '{song}': {e}")
 
 if __name__ == "__main__":
     main()
