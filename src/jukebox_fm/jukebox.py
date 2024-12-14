@@ -7,9 +7,9 @@ from toml import load, dump
 from mpd import MPDClient
 from yt_dlp import YoutubeDL
 from requests import get, RequestException
-client = MPDClient() # setup mpd(1) ref: https://github.com/polarhive/dotfiles/
+client = MPDClient() # setup mpd(1) ref: https://polarhive.net/dots
 
-def main():    
+def main():
     args = parse_arguments()
     basicConfig(level=args.l, format='%(asctime)s - %(levelname)s - %(message)s', filename='/tmp/jukebox-fm.log', filemode='a')
     console_handler = StreamHandler(); console_handler.setLevel(args.l); console_handler.setFormatter(Formatter('%(asctime)s - %(levelname)s - %(message)s'))
@@ -22,12 +22,12 @@ def main():
     mode = args.m if args.m else config['lastfm']['mode']
     friends = args.f # friend mode enabled
     endpoint = determine_endpoint(args, username, mode)
-    
+
     # check if we can connect to the local MPD server
     try:
         client.connect('localhost', 6600)
         ydl_config = configure_ydl(config, music_folder)
-        
+
         if args.f:
             if friends == True: # -f but no path override 
                 friends = path.expanduser(config['friends']['friends_file'])
@@ -77,7 +77,7 @@ def create_default_config(config_path):
         },
         'friends': {'friends_file': '~/config/jukebox-fm/friends.txt'}
     }
-    
+
     try:
         with open(config_path, 'w') as config_file: dump(default_config, config_file)
         info(f"Created default configuration file at {config_path}")
@@ -89,7 +89,7 @@ def determine_endpoint(args, username, mode):
     elif args.g: return f"tag/{args.g}"
     elif args.p: return args.p.replace("https://www.last.fm/", "").replace("user/", "user/")
     else: return f"user/{username}/{mode}"
-    
+
 def configure_ydl(config, music_folder):
     return {
         'format': config['yt_dlp']['format'],
@@ -119,14 +119,14 @@ def fetch_lastfm_data(endpoint, music_folder, ydl_config):
         playlist = response.json().get("playlist", [])
 
         if not playlist: info("No tracks found in the playlist."); return
-        
+
         parsed_tracks = parse_tracks(playlist)
-        
+
         info(f"Fetched: {len(parsed_tracks)} tracks")
         for artist, title, playlink_id in parsed_tracks:
             if is_track_in_library(artist, title): queue_song(f"{artist} - {title}")
             else: download_song(artist, title, playlink_id, music_folder, ydl_config)
-            
+
     except RequestException as e: log_error(f"Can't fetch data from LastFM: {e}")
 
 def parse_tracks(playlist):
@@ -158,7 +158,7 @@ def queue_song(song):
         info(f"Queued: {song}")
     except Exception as e:
         log_error(f"Could not queue song '{song}': {e}")
-        
+
 def download_song(artist, title, playlink_id, music_folder, ydl_config):
     youtube_url = f"https://www.youtube.com/watch?v={playlink_id}"
     ydl_opts = {
@@ -184,3 +184,4 @@ def log_error(message):
 
 if __name__ == "__main__":
     main()
+
