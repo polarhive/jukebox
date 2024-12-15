@@ -22,7 +22,6 @@ dependencies = [
     "python-mpd2"
 ]
 
-
 [project.urls]
 Homepage = "https://github.com/polarhive/jukebox"
 Issues = "https://github.com/polarhive/jukebox/issues"
@@ -32,3 +31,4 @@ packages = { find = { where = ["src"] } }
 
 [project.scripts]
 jukebox-fm = "jukebox_fm.jukebox:main"
+

@@ -10,17 +10,17 @@ from requests import get, RequestException
 client = MPDClient()
 
 def main():
+    args = parse_arguments()
+    basicConfig(level=args.l, format='%(asctime)s - %(levelname)s - %(message)s', filename='/tmp/jukebox-fm.log', filemode='a')
+    console_handler = StreamHandler(); console_handler.setLevel(args.l); console_handler.setFormatter(Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    getLogger().addHandler(console_handler)
+
     config_dir = path.expanduser("~/.config/jukebox-fm")
     if not path.exists(config_dir):
         print("It looks like this is your first time running jukebox!")
         print("Please run the setup script:")
         print("curl -fsSL https://raw.githubusercontent.com/polarhive/jukebox/refs/heads/main/setup.sh | bash")
         exit(1)
-
-    args = parse_arguments()
-    basicConfig(level=args.l, format='%(asctime)s - %(levelname)s - %(message)s', filename='/tmp/jukebox-fm.log', filemode='a')
-    console_handler = StreamHandler(); console_handler.setLevel(args.l); console_handler.setFormatter(Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-    getLogger().addHandler(console_handler)
 
     config = load_config(path.join(config_dir, "config.toml"))
     music_folder = path.expanduser(config['music']['music_folder'])
@@ -50,10 +50,6 @@ def main():
         log_error(e)
     finally:
         client.disconnect()
-    args = parse_arguments()
-    basicConfig(level=args.l, format='%(asctime)s - %(levelname)s - %(message)s', filename='/tmp/jukebox-fm.log', filemode='a')
-    console_handler = StreamHandler(); console_handler.setLevel(args.l); console_handler.setFormatter(Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-    getLogger().addHandler(console_handler)
 
     # toml
     config = load_config(path.expanduser("~/.config/jukebox-fm/config.toml"))
