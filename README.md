@@ -2,9 +2,8 @@
 
 Play LastFM music recommendations using: mpd, yt-dlp and python
 
-## Install
+## Setup
 
 ```sh
-git clone https://github.com/polarhive/jukebox
-sh ./jukebox/install.sh
+curl -fsSL https://raw.githubusercontent.com/polarhive/jukebox/refs/heads/main/setup.sh | bash
 ```

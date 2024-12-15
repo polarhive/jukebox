@@ -7,9 +7,49 @@ from toml import load, dump
 from mpd import MPDClient
 from yt_dlp import YoutubeDL
 from requests import get, RequestException
-client = MPDClient() # setup mpd(1) ref: https://polarhive.net/dots
+client = MPDClient()
 
 def main():
+    config_dir = path.expanduser("~/.config/jukebox-fm")
+    if not path.exists(config_dir):
+        print("It looks like this is your first time running jukebox!")
+        print("Please run the setup script:")
+        print("curl -fsSL https://raw.githubusercontent.com/polarhive/jukebox/refs/heads/main/setup.sh | bash")
+        exit(1)
+
+    args = parse_arguments()
+    basicConfig(level=args.l, format='%(asctime)s - %(levelname)s - %(message)s', filename='/tmp/jukebox-fm.log', filemode='a')
+    console_handler = StreamHandler(); console_handler.setLevel(args.l); console_handler.setFormatter(Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    getLogger().addHandler(console_handler)
+
+    config = load_config(path.join(config_dir, "config.toml"))
+    music_folder = path.expanduser(config['music']['music_folder'])
+    username = args.u if args.u else config['lastfm']['username']
+    mode = args.m if args.m else config['lastfm']['mode']
+    friends = args.f  # Friend mode enabled
+    endpoint = determine_endpoint(args, username, mode)
+
+    try:
+        client.connect('localhost', 6600)
+        ydl_config = configure_ydl(config, music_folder)
+
+        if args.f:
+            if friends is True:  # -f but no path override
+                friends = path.expanduser(config['friends']['friends_file'])
+            friends = load_friends(friends)
+            mode = args.m or "library"
+            for username in friends:
+                info(f"Fetching: {username}")
+                fetch_lastfm_data(f"user/{username}/{mode}", music_folder, ydl_config)
+        else:
+            fetch_lastfm_data(endpoint, music_folder, ydl_config)
+
+    except KeyboardInterrupt:
+        info("Interrupted by user")
+    except Exception as e:
+        log_error(e)
+    finally:
+        client.disconnect()
     args = parse_arguments()
     basicConfig(level=args.l, format='%(asctime)s - %(levelname)s - %(message)s', filename='/tmp/jukebox-fm.log', filemode='a')
     console_handler = StreamHandler(); console_handler.setLevel(args.l); console_handler.setFormatter(Formatter('%(asctime)s - %(levelname)s - %(message)s'))
@@ -75,7 +115,7 @@ def create_default_config(config_path):
             'outtmpl': '%(artist)s - %(title)s',
             'preferred_quality': '192'
         },
-        'friends': {'friends_file': '~/config/jukebox-fm/friends.txt'}
+        'friends': {'friends_file': '~/.config/jukebox-fm/friends.txt'}
     }
 
     try:

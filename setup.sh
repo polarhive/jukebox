@@ -6,6 +6,9 @@ pause() {
   clear
 }
 
+repo_url="https://github.com/polarhive/jukebox/archive/refs/heads/main.tar.gz"
+tarball="/tmp/jukebox-main.tar.gz"
+extracted_dir="/tmp/jukebox-main"
 venv_path="$HOME/.local/bin/jukebox-fm/.venv"
 
 check_package() {
@@ -28,8 +31,26 @@ setup_venv() {
   clear
 }
 
+download_repo() {
+  echo "Downloading the repository tarball to /tmp..."
+  curl -fsSL "$repo_url" -o "$tarball"
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to download tarball. Check your network connection."
+    exit 1
+  fi
+
+  echo "Extracting tarball to /tmp..."
+  mkdir -p "$extracted_dir"
+  tar -xzf "$tarball" -C /tmp
+  if [ $? -ne 0 ]; then
+    echo "Error: Failed to extract tarball."
+    exit 1
+  fi
+  clear
+}
+
 copy_config_files() {
-  local src_dir="docs/."
+  local src_dir="$extracted_dir/docs/."
   local dest_dir="$HOME"
   cp -r "$src_dir" "$dest_dir"
   if [ $? -ne 0 ]; then
@@ -53,6 +74,7 @@ check_package "ncmpcpp" "ncmpcpp"
 check_package "ffmpeg" "FFmpeg"
 pause
 
+download_repo
 setup_venv
 echo "Virtual environment setup complete."
 pause
@@ -77,11 +99,14 @@ fi
 
 clear
 
+rm -rf "$tarball" "$extracted_dir"
 echo "Setup completed successfully!"
 sleep 1
 clear
-echo "Now opening: ncmpcpp -- remember to press 'Enter' to start playing and 'p' to pause."
-sleep 5
+echo "Now opening: ncmpcpp"
+sleep 1
+echo "Remember to press 'Enter' to start playing and 'p' to pause."
+sleep 4
 
 ncmpcpp -q
 

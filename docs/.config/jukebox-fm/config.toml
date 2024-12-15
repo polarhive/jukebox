@@ -1,0 +1,17 @@
+[music]
+music_folder = "~/Music/dl"
+
+[lastfm]
+username = "lastfm"
+mode = "mix"
+
+[yt_dlp]
+format = "opus/bestaudio"
+quiet = true
+noplaylist = true
+geo_bypass = true
+outtmpl = "%(artist)s - %(title)s"
+preferred_quality = "192"
+
+[friends]
+friends_file = "~/.config/jukebox-fm/friends.txt"
