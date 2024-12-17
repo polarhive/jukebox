@@ -17,45 +17,17 @@ def main():
 
     config_dir = path.expanduser("~/.config/jukebox-fm")
     if not path.exists(config_dir):
-        print("It looks like this is your first time running jukebox!")
-        print("Please run the setup script:")
-        print("curl -fsSL https://raw.githubusercontent.com/polarhive/jukebox/refs/heads/main/setup.sh | bash")
+        warning("It looks like this is your first time running jukebox!")
+        warning("Please run the setup script:")
+        warning("curl -fsSL https://raw.githubusercontent.com/polarhive/jukebox/refs/heads/main/setup.sh | bash")
         exit(1)
 
+    # toml
     config = load_config(path.join(config_dir, "config.toml"))
     music_folder = path.expanduser(config['music']['music_folder'])
     username = args.u if args.u else config['lastfm']['username']
     mode = args.m if args.m else config['lastfm']['mode']
-    friends = args.f  # Friend mode enabled
-    endpoint = determine_endpoint(args, username, mode)
-
-    try:
-        client.connect('localhost', 6600)
-        ydl_config = configure_ydl(config, music_folder)
-
-        if args.f:
-            if friends is True:  # -f but no path override
-                friends = path.expanduser(config['friends']['friends_file'])
-            friends = load_friends(friends)
-            mode = args.m or "library"
-            for username in friends:
-                info(f"Fetching: {username}")
-                fetch_lastfm_data(f"user/{username}/{mode}", music_folder, ydl_config)
-        else:
-            fetch_lastfm_data(endpoint, music_folder, ydl_config)
-
-    except KeyboardInterrupt:
-        info("Interrupted by user")
-    except Exception as e:
-        log_error(e)
-    finally:
-        client.disconnect()
-
-    # toml
-    config = load_config(path.expanduser("~/.config/jukebox-fm/config.toml"))
-    music_folder = path.expanduser(config['music']['music_folder'])
-    username = args.u if args.u else config['lastfm']['username']
-    mode = args.m if args.m else config['lastfm']['mode']
+    if args.b: global api_key; api_key = config["lastfm"]["api_key"]
     friends = args.f # friend mode enabled
     endpoint = determine_endpoint(args, username, mode)
 
@@ -82,6 +54,7 @@ def main():
 def parse_arguments():
     parser = ArgumentParser(description="Play LastFM music recommendations using: mpd, yt-dlp and python")
     parser.add_argument("-a", help="Play a particular artist")
+    parser.add_argument("-b", help="Search albums by artist")
     parser.add_argument("-g", help="Play a specified genre")
     parser.add_argument("-p", help="Play a specified playlist")
     parser.add_argument("-u", help="Custom LastFM username", default=None)
@@ -119,12 +92,47 @@ def create_default_config(config_path):
         info(f"Created default configuration file at {config_path}")
     except Exception as e: log_error(f"Could not create default configuration file: {e}")
 
-# endpoint URL
+# returns albums for artist
+def album(artist_name):
+    url = "https://ws.audioscrobbler.com/2.0/"
+    params = {
+        "method": "artist.gettopalbums",
+        "artist": artist_name,
+        "api_key": api_key,
+        "format": "json",
+    }
+
+    response = get(url, params=params)
+    if response.status_code != 200:
+        log_error("Failed to fetch albums from Last.fm")
+        return None
+
+    albums = []
+    for album in response.json().get("topalbums", {}).get("album", []):
+        album_name = album.get("name", "").strip()
+        if album_name and album_name.lower() != "(null)":
+            album_url = f"https://www.last.fm/music/{artist_name.replace(' ', '+')}/{album_name.replace(' ', '+')}"
+            albums.append((album_name, album_url))
+
+    if not albums:
+        log_error("No valid albums found for this artist.")
+        return None
+
+    print("\nAvailable Albums:")
+    for i, (name, _) in enumerate(albums): print(f"{i}. {name}")
+
+    choice = int(input("\n Select an album: "))
+    selected_name, selected_url = albums[choice]
+    return selected_url
+
+
 def determine_endpoint(args, username, mode):
     if args.a: return f"music/{args.a}"
+    elif args.b: args.p = album(args.b)
     elif args.g: return f"tag/{args.g}"
-    elif args.p: return args.p.replace("https://www.last.fm/", "").replace("user/", "user/")
+    if args.p: return args.p.replace("https://www.last.fm/", "")
     else: return f"user/{username}/{mode}"
+
 
 def configure_ydl(config, music_folder):
     return {
@@ -220,4 +228,3 @@ def log_error(message):
 
 if __name__ == "__main__":
     main()
-
