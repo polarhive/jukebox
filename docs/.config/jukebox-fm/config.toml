@@ -4,14 +4,15 @@ music_folder = "~/Music/dl"
 [lastfm]
 username = "lastfm"
 mode = "mix"
+API_KEY = "" #https://www.last.fm/api/accounts
 
 [yt_dlp]
-format = "opus/bestaudio"
 quiet = true
 noplaylist = true
 geo_bypass = true
-outtmpl = "%(artist)s - %(title)s"
 preferred_quality = "192"
+format = "opus/bestaudio"
+outtmpl = "%(artist)s - %(title)s"
 
 [friends]
 friends_file = "~/.config/jukebox-fm/friends.txt"

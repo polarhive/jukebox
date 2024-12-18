@@ -22,35 +22,33 @@ client = MPDClient()
 
 
 def main():
-    args = parse_arguments()
-    basicConfig(
-        level=args.l,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        filename="/tmp/jukebox-fm.log",
-        filemode="a",
-    )
-    console_handler = StreamHandler()
-    console_handler.setLevel(args.l)
-    console_handler.setFormatter(Formatter("%(asctime)s - %(levelname)s - %(message)s"))
-    getLogger().addHandler(console_handler)
-
-    config_dir = path.expanduser("~/.config/jukebox-fm")
-    if not path.exists(config_dir):
-        warning("It looks like this is your first time running jukebox!")
-        warning("Please run the setup script:")
-        warning(
-            "curl -fsSL https://raw.githubusercontent.com/polarhive/jukebox/refs/heads/main/setup.sh | bash"
-        )
-        exit(1)
+    args = logger()
+    config_dir = init()
 
     # toml
     config = load_config(path.join(config_dir, "config.toml"))
     music_folder = path.expanduser(config["music"]["music_folder"])
     username = args.u if args.u else config["lastfm"]["username"]
     mode = args.m if args.m else config["lastfm"]["mode"]
+    global download_mode
+    if not args.d:
+        download_mode = False
+
     if args.b:
         global api_key
-        api_key = config["lastfm"]["api_key"]
+        api_key = config["lastfm"]["API_KEY"]
+        if not api_key:
+            error("empty API_KEY")
+            exit(1)
+
+    if args.d:
+        if not args.b:
+            error("Download mode cannot be used without -b.")
+            exit(1)
+        else:
+            download_mode = True
+            info("Download mode is on")
+
     friends = args.f  # friend mode enabled
     endpoint = determine_endpoint(args, username, mode)
 
@@ -67,6 +65,17 @@ def main():
             for username in friends:
                 info(f"fetching: {username}")
                 fetch_lastfm_data(f"user/{username}/{mode}", music_folder, ydl_config)
+
+        elif download_mode:
+            for i, (name, _) in enumerate(albums):
+                info(f"{i}/{len(albums)}: {name}")
+                selected_name, _ = albums[i]
+                selected_url = next(
+                    url for name, url in albums if name == selected_name
+                )
+                endpoint = selected_url.replace("https://www.last.fm/", "")
+                fetch_lastfm_data(endpoint, music_folder, ydl_config)
+
         else:
             fetch_lastfm_data(endpoint, music_folder, ydl_config)
 
@@ -78,12 +87,30 @@ def main():
         client.disconnect()
 
 
+def logger():
+    args = parse_arguments()
+    basicConfig(
+        level=args.l,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        filename="/tmp/jukebox-fm.log",
+        filemode="a",
+    )
+    console_handler = StreamHandler()
+    console_handler.setLevel(args.l)
+    console_handler.setFormatter(Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+    getLogger().addHandler(console_handler)
+    return args
+
+
 def parse_arguments():
     parser = ArgumentParser(
         description="Play LastFM music recommendations using: mpd, yt-dlp and python"
     )
+    parser.add_argument(
+        "-b", metavar="VALUES", type=str, help="Search albums by artist"
+    )
+    parser.add_argument("-d", action="store_true", help="Enable download mode.")
     parser.add_argument("-a", help="Play a particular artist")
-    parser.add_argument("-b", help="Search albums by artist")
     parser.add_argument("-g", help="Play a specified genre")
     parser.add_argument("-p", help="Play a specified playlist")
     parser.add_argument("-u", help="Custom LastFM username", default=None)
@@ -104,6 +131,18 @@ def parse_arguments():
     return parser.parse_args()
 
 
+def init():
+    config_dir = path.expanduser("~/.config/jukebox-fm")
+    if not path.exists(config_dir):
+        warning("It looks like this is your first time running jukebox!")
+        warning("Please run the setup script:")
+        warning(
+            "curl -fsSL https://raw.githubusercontent.com/polarhive/jukebox/refs/heads/main/setup.sh | bash"
+        )
+        exit(1)
+    return config_dir
+
+
 def load_config(config_path):
     if not path.exists(config_path):
         create_default_config(config_path)
@@ -122,14 +161,14 @@ def create_default_config(config_path):
 
     default_config = {
         "music": {"music_folder": "~/Music/dl"},
-        "lastfm": {"username": "lastfm", "mode": "mix"},
+        "lastfm": {"username": "lastfm", "mode": "mix", "API_KEY": ""},
         "yt_dlp": {
-            "format": "opus/bestaudio",
             "quiet": True,
             "noplaylist": True,
             "geo_bypass": True,
-            "outtmpl": "%(artist)s - %(title)s",
             "preferred_quality": "192",
+            "format": "opus/bestaudio",
+            "outtmpl": "%(artist)s - %(title)s",
         },
         "friends": {"friends_file": "~/.config/jukebox-fm/friends.txt"},
     }
@@ -166,45 +205,56 @@ def album(artist_name):
     if not albums:
         log_error("No valid albums found for this artist.")
         return None
-
-    fzf_exists = which("fzf") is not None
-    if fzf_exists:
-        album_names = [name for name, _ in albums]
-        try:
-            info("Launching fzf for album selection...")
-            result = run(
-                ["fzf"], input="\n".join(album_names), text=True, capture_output=True
-            )
-            selected_name = result.stdout.strip()
-            if not selected_name:
-                warning("No album selected.")
-                return None
-            selected_url = next(url for name, url in albums if name == selected_name)
-            return selected_url
-        except Exception as e:
-            error(f"Error running fzf: {e}")
-            return None
-    else:
-        print("Available Albums:")
-        for i, (name, _) in enumerate(albums):
-            print(f"{i}. {name}")
-        while True:
+    elif not download_mode:
+        fzf_exists = which("fzf") is not None
+        if fzf_exists:
+            album_names = [name for name, _ in albums]
             try:
-                choice = int(input("\nSelect an album (by number): "))
-                selected_name, _ = albums[choice]
+                info("Launching fzf for album selection...")
+                result = run(
+                    ["fzf"],
+                    input="\n".join(album_names),
+                    text=True,
+                    capture_output=True,
+                )
+                selected_name = result.stdout.strip()
+                if not selected_name:
+                    warning("No album selected.")
+                    return None
                 selected_url = next(
                     url for name, url in albums if name == selected_name
                 )
                 return selected_url
-            except (ValueError, IndexError):
-                print("Invalid selection. Please choose a valid album number.")
+            except Exception as e:
+                error(f"Error running fzf: {e}")
+                return None
+        else:
+            print("Available Albums:")
+            for i, (name, _) in enumerate(albums):
+                print(f"{i}. {name}")
+            while True:
+                try:
+                    choice = int(input("\nSelect an album (by number): "))
+                    selected_name, _ = albums[choice]
+                    selected_url = next(
+                        url for name, url in albums if name == selected_name
+                    )
+                    return selected_url
+                except (ValueError, IndexError):
+                    print("Invalid selection. Please choose a valid album number.")
+    else:
+        return albums
 
 
 def determine_endpoint(args, username, mode):
     if args.a:
         return f"music/{args.a}"
     elif args.b:
-        args.p = album(args.b)
+        if args.d:
+            global albums
+            albums = album(args.b)
+        else:
+            args.p = album(args.b)
     elif args.g:
         return f"tag/{args.g}"
     if args.p:
