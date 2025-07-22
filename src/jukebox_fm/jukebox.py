@@ -34,12 +34,16 @@ def main():
     if not args.d:
         download_mode = False
 
-    if args.b:
+    if args.b or args.o:
         global api_key
         api_key = config["lastfm"]["API_KEY"]
         if not api_key:
             error("empty API_KEY")
             exit(1)
+
+    if args.o:
+        download_mode = True
+        info("Loved tracks mode is on")
 
     if args.d:
         if not args.b:
@@ -65,6 +69,9 @@ def main():
             for username in friends:
                 info(f"fetching: {username}")
                 fetch_lastfm_data(f"user/{username}/{mode}", music_folder, ydl_config)
+
+        elif args.o:
+            download_loved_tracks(username, music_folder, ydl_config, config)
 
         elif download_mode:
             for i, (name, _) in enumerate(albums):
@@ -116,6 +123,9 @@ def parse_arguments():
     parser.add_argument("-u", help="Custom LastFM username", default=None)
     parser.add_argument("-m", help="Custom LastFM mode", default=None)
     parser.add_argument(
+        "-o", action="store_true", help="Download user's loved tracks from LastFM"
+    )
+    parser.add_argument(
         "-f",
         help="Path to LastFM usernames friends.txt",
         nargs="?",
@@ -161,7 +171,7 @@ def create_default_config(config_path):
 
     default_config = {
         "music": {"music_folder": "~/Music/dl"},
-        "lastfm": {"username": "lastfm", "mode": "mix", "API_KEY": ""},
+        "lastfm": {"username": "lastfm", "mode": "mix", "API_KEY": "", "limit": 50},
         "yt_dlp": {
             "quiet": True,
             "noplaylist": True,
@@ -246,6 +256,50 @@ def album(artist_name):
         return albums
 
 
+def fetch_loved_tracks(username, config=None):
+    limit = 50
+    if config and "lastfm" in config and "limit" in config["lastfm"]:
+        limit = config["lastfm"]["limit"]
+
+    url = "https://ws.audioscrobbler.com/2.0/"
+    params = {
+        "method": "user.getlovedtracks",
+        "user": username,
+        "api_key": api_key,
+        "format": "json",
+        "limit": limit,
+    }
+
+    try:
+        response = get(url, params=params)
+        response.raise_for_status()
+
+        data = response.json()
+        loved_tracks = data.get("lovedtracks", {}).get("track", [])
+
+        if not loved_tracks:
+            info("No loved tracks found.")
+            return []
+
+        tracks = []
+        for track in loved_tracks:
+            try:
+                artist_name = track.get("artist", {}).get("name", "")
+                track_name = track.get("name", "")
+                if artist_name and track_name:
+                    tracks.append((artist_name, track_name))
+                    info(f"Found loved track: {artist_name} - {track_name}")
+            except (TypeError, KeyError) as e:
+                warning(f"Error parsing loved track data: {e}")
+
+        info(f"Total loved tracks found: {len(tracks)}")
+        return tracks
+
+    except RequestException as e:
+        log_error(f"Failed to fetch loved tracks from Last.fm: {e}")
+        return []
+
+
 def determine_endpoint(args, username, mode):
     if args.a:
         return f"music/{args.a}"
@@ -281,6 +335,31 @@ def configure_ydl(config, music_folder):
     }
 
 
+def download_loved_tracks(username, music_folder, ydl_config, config=None):
+    """Download all loved tracks for a user"""
+    info(f"Fetching loved tracks for user: {username}")
+    loved_tracks = fetch_loved_tracks(username, config)
+
+    if not loved_tracks:
+        info("No loved tracks to download.")
+        return
+
+    info(f"Starting download of {len(loved_tracks)} loved tracks...")
+
+    for i, (artist, title) in enumerate(loved_tracks, 1):
+        info(f"Processing {i}/{len(loved_tracks)}: {artist} - {title}")
+
+        # Check if track is already in library
+        if is_track_in_library(artist, title):
+            queue_song(f"{artist} - {title}")
+            continue
+
+        # Search for the track on YouTube and download
+        download_song(artist, title, music_folder, ydl_config, return_success=True)
+
+    info("Finished processing loved tracks.")
+
+
 def load_friends(friends_file):
     try:
         with open(friends_file, "r") as file:
@@ -311,7 +390,7 @@ def fetch_lastfm_data(endpoint, music_folder, ydl_config):
             if is_track_in_library(artist, title):
                 queue_song(f"{artist} - {title}")
             else:
-                download_song(artist, title, playlink_id, music_folder, ydl_config)
+                download_song(artist, title, music_folder, ydl_config, playlink_id)
 
     except RequestException as e:
         log_error(f"Can't fetch data from LastFM: {e}")
@@ -353,35 +432,80 @@ def queue_song(song):
         sleep(0.1)
         client.add(f"dl/{song}.opus")
         info(f"Queued: {song}")
+        return True
     except Exception as e:
         log_error(f"Could not queue song '{song}': {e}")
+        return False
 
 
-def download_song(artist, title, playlink_id, music_folder, ydl_config):
-    youtube_url = f"https://www.youtube.com/watch?v={playlink_id}"
-    ydl_opts = {
-        **ydl_config,
-        "postprocessor_args": [
-            "-metadata",
-            f"title={title}",
-            "-metadata",
-            f"artist={artist}",
-        ],
-        "outtmpl": path.join(music_folder, f"{artist} - {title}"),
-    }
+def download_song(
+    artist, title, music_folder, ydl_config, playlink_id=None, return_success=False
+):
+    """
+    Download a song using yt-dlp and queue it in MPD.
 
-    with YoutubeDL(ydl_opts) as ydl:
-        song = f"{artist} - {title}"
-        try:
-            ydl.download([youtube_url])
-            queue_song(song)
-        except Exception as e:
+    Args:
+        artist: Artist name
+        title: Song title
+        music_folder: Folder to download to
+        ydl_config: yt-dlp configuration
+        playlink_id: YouTube video ID (if None, will search YouTube)
+        return_success: If True, returns success boolean instead of just logging
+
+    Returns:
+        bool: Success status if return_success=True, otherwise None
+    """
+    song = f"{artist} - {title}"
+
+    # Determine download URL/search
+    if playlink_id:
+        url_or_search = f"https://www.youtube.com/watch?v={playlink_id}"
+        ydl_opts = {**ydl_config}
+    else:
+        url_or_search = f"{artist} {title}"
+        ydl_opts = {**ydl_config, "default_search": "ytsearch1:"}
+
+    ydl_opts.update(
+        {
+            "postprocessor_args": [
+                "-metadata",
+                f"title={title}",
+                "-metadata",
+                f"artist={artist}",
+            ],
+            "outtmpl": path.join(music_folder, f"{artist} - {title}"),
+        }
+    )
+
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url_or_search])
+
+        # Queue the song
+        queue_success = queue_song(song)
+
+        if return_success:
+            if queue_success:
+                info(f"Downloaded and queued: {song}")
+                return True
+            else:
+                warning(f"Downloaded but failed to queue: {song}")
+                return False
+        else:
+            pass
+
+    except Exception as e:
+        if return_success:
+            warning(f"Could not download '{song}': {e}")
+            return False
+        else:
             error(f"Could not download song '{song}': {e}")
+
+    return None if not return_success else False
 
 
 def log_error(message):
     error(message)
-    exit(1)
 
 
 if __name__ == "__main__":
