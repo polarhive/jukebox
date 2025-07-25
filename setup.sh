@@ -23,7 +23,7 @@ check_package() {
 setup_venv() {
   if [ ! -d "$venv_path" ]; then
     echo "Creating virtual environment at $venv_path..."
-    python -m venv "$venv_path"
+    python3 -m venv "$venv_path"
   fi
 
   source "$venv_path/bin/activate"
@@ -67,7 +67,7 @@ pause
 
 echo "Checking required system packages..."
 sleep 1
-check_package "python" "Python"
+check_package "python3" "python3"
 check_package "mpc" "MPC"
 check_package "mpd" "MPD"
 check_package "ncmpcpp" "ncmpcpp"
@@ -92,7 +92,7 @@ pause
 
 echo "Running jukebox-fm..."
 source "$venv_path/bin/activate"
-if ! python -m jukebox_fm.jukebox; then
+if ! python3 -m jukebox_fm.jukebox; then
   echo "Error: Failed to execute jukebox-fm."
   exit 1
 fi
