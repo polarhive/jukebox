@@ -14,9 +14,10 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio :: Players",
     "Operating System :: OS Independent",
 ]
+requires-python = ">=3.11"
 
 dependencies = [
-    "requests",
+    "requests>=2.32.5",
     "yt-dlp",
     "toml",
     "python-mpd2"
@@ -26,9 +27,11 @@ dependencies = [
 Homepage = "https://github.com/polarhive/jukebox"
 Issues = "https://github.com/polarhive/jukebox/issues"
 
-[tool.setuptools]
-packages = { find = { where = ["src"] } }
-
 [project.scripts]
 jukebox-fm = "jukebox_fm.jukebox:main"
 
+[tool.uv]
+package = true
+
+[tool.setuptools]
+packages = { find = { where = ["src"] } }
