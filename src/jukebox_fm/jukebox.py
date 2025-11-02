@@ -179,6 +179,7 @@ def create_default_config(config_path):
             "preferred_quality": "192",
             "format": "opus/bestaudio",
             "outtmpl": "%(artist)s - %(title)s",
+            "cookies": "",
         },
         "friends": {"friends_file": "~/.config/jukebox-fm/friends.txt"},
     }
@@ -318,7 +319,7 @@ def determine_endpoint(args, username, mode):
 
 
 def configure_ydl(config, music_folder):
-    return {
+    ydl_opts = {
         "format": config["yt_dlp"]["format"],
         "quiet": True,
         "noprogress": config["yt_dlp"]["quiet"],
@@ -333,6 +334,21 @@ def configure_ydl(config, music_folder):
             {"key": "FFmpegMetadata"},
         ],
     }
+
+    # If a cookies file is provided in the config, pass it to yt-dlp
+    try:
+        cookies_path = config.get("yt_dlp", {}).get("cookies", "")
+        if cookies_path:
+            cookies_path = path.expanduser(cookies_path)
+            if path.exists(cookies_path):
+                ydl_opts["cookiefile"] = cookies_path
+                info(f"Using cookies file for yt-dlp: {cookies_path}")
+            else:
+                warning(f"Configured cookies file not found: {cookies_path}")
+    except Exception as e:
+        warning(f"Error while processing cookies config: {e}")
+
+    return ydl_opts
 
 
 def download_loved_tracks(username, music_folder, ydl_config, config=None):
