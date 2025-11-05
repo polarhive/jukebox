@@ -17,12 +17,15 @@ from yt_dlp import YoutubeDL
 from subprocess import run
 from shutil import which
 from requests import get, RequestException
+from importlib import metadata
 
 client = MPDClient()
 
 
 def main():
     args = logger()
+    if getattr(args, "version", False) or getattr(args, "v", False):
+        print_version_and_exit()
     config_dir = init()
 
     # toml
@@ -68,23 +71,32 @@ def main():
             mode = args.m or "library"
             for username in friends:
                 info(f"fetching: {username}")
-                fetch_lastfm_data(f"user/{username}/{mode}", music_folder, ydl_config)
+                fetch_lastfm_data(f"user/{username}/{mode}", music_folder, ydl_config, config)
 
         elif args.o:
             download_loved_tracks(username, music_folder, ydl_config, config)
 
         elif download_mode:
-            for i, (name, _) in enumerate(albums):
-                info(f"{i}/{len(albums)}: {name}")
-                selected_name, _ = albums[i]
+            max_albums = None
+            if config and "lastfm" in config:
+                max_albums = config["lastfm"].get("max_albums")
+            
+            albums_to_process = albums
+            if max_albums and len(albums) > max_albums:
+                info(f"Limiting to {max_albums} albums (found {len(albums)})")
+                albums_to_process = albums[:max_albums]
+            
+            for i, (name, _) in enumerate(albums_to_process):
+                info(f"{i+1}/{len(albums_to_process)}: {name}")
+                selected_name, _ = albums_to_process[i]
                 selected_url = next(
                     url for name, url in albums if name == selected_name
                 )
                 endpoint = selected_url.replace("https://www.last.fm/", "")
-                fetch_lastfm_data(endpoint, music_folder, ydl_config)
+                fetch_lastfm_data(endpoint, music_folder, ydl_config, config)
 
         else:
-            fetch_lastfm_data(endpoint, music_folder, ydl_config)
+            fetch_lastfm_data(endpoint, music_folder, ydl_config, config)
 
     except KeyboardInterrupt:
         info("Interrupted by user")
@@ -138,6 +150,12 @@ def parse_arguments():
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
     )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="store_true",
+        help="Show program version and exit",
+    )
     return parser.parse_args()
 
 
@@ -171,7 +189,15 @@ def create_default_config(config_path):
 
     default_config = {
         "music": {"music_folder": "~/Music/dl"},
-        "lastfm": {"username": "lastfm", "mode": "mix", "API_KEY": "", "limit": 50},
+        "lastfm": {
+            "username": "lastfm",
+            "mode": "mix",
+            "API_KEY": "",  # Get your API key from https://www.last.fm/api/accounts
+            # Limits (only used when API_KEY is set)
+            "loved_tracks_limit": 50,  # Max loved tracks to fetch with -o flag
+            "max_tracks": 50,  # Max tracks to download from playlists/stations
+            "max_albums": 10,  # Max albums to download when using -b with -d
+        },
         "yt_dlp": {
             "quiet": True,
             "noplaylist": True,
@@ -179,6 +205,8 @@ def create_default_config(config_path):
             "preferred_quality": "192",
             "format": "opus/bestaudio",
             "outtmpl": "%(artist)s - %(title)s",
+            # Optional path to a cookies.txt (Netscape) file to pass to yt-dlp
+            # Example: "~/.config/jukebox-fm/cookies.txt"
             "cookies": "",
         },
         "friends": {"friends_file": "~/.config/jukebox-fm/friends.txt"},
@@ -259,8 +287,8 @@ def album(artist_name):
 
 def fetch_loved_tracks(username, config=None):
     limit = 50
-    if config and "lastfm" in config and "limit" in config["lastfm"]:
-        limit = config["lastfm"]["limit"]
+    if config and "lastfm" in config:
+        limit = config["lastfm"].get("loved_tracks_limit", config["lastfm"].get("limit", 50))
 
     url = "https://ws.audioscrobbler.com/2.0/"
     params = {
@@ -388,7 +416,7 @@ def load_friends(friends_file):
         log_error(f"Could not read friends.txt: {e}")
 
 
-def fetch_lastfm_data(endpoint, music_folder, ydl_config):
+def fetch_lastfm_data(endpoint, music_folder, ydl_config, config=None):
     url = f"https://www.last.fm/player/station/{endpoint}"
     try:
         response = get(url)
@@ -400,6 +428,14 @@ def fetch_lastfm_data(endpoint, music_folder, ydl_config):
             return
 
         parsed_tracks = parse_tracks(playlist)
+
+        max_tracks = None
+        if config and "lastfm" in config:
+            max_tracks = config["lastfm"].get("max_tracks")
+        
+        if max_tracks and len(parsed_tracks) > max_tracks:
+            info(f"Limiting to {max_tracks} tracks (found {len(parsed_tracks)})")
+            parsed_tracks = parsed_tracks[:max_tracks]
 
         info(f"Fetched: {len(parsed_tracks)} tracks")
         for artist, title, playlink_id in parsed_tracks:
@@ -522,6 +558,30 @@ def download_song(
 
 def log_error(message):
     error(message)
+
+
+def print_version_and_exit():
+    try:
+        ver = metadata.version("jukebox-fm")
+        print(ver)
+        exit(0)
+    except Exception:
+        try:
+            here = path.dirname(path.dirname(path.dirname(__file__)))
+            pyproject = path.join(here, "pyproject.toml")
+            if path.exists(pyproject):
+                with open(pyproject, "r") as f:
+                    for line in f:
+                        if line.strip().startswith("version"):
+                            parts = line.split("=", 1)
+                            if len(parts) == 2:
+                                ver = parts[1].strip().strip('"').strip("'")
+                                print(ver)
+                                exit(0)
+        except Exception:
+            pass
+    print("unknown")
+    exit(0)
 
 
 if __name__ == "__main__":

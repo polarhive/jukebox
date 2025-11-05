@@ -6,6 +6,11 @@ username = "lastfm"
 mode = "mix"
 API_KEY = "" #https://www.last.fm/api/accounts
 
+# Limits (only used when API_KEY is set)
+loved_tracks_limit = 50  # Max loved tracks to fetch with -o flag
+max_tracks = 50          # Max tracks to download from playlists/stations
+max_albums = 10          # Max albums to download when using -b with -d
+
 [yt_dlp]
 quiet = true
 noplaylist = true
@@ -13,6 +18,10 @@ geo_bypass = true
 preferred_quality = "192"
 format = "opus/bestaudio"
 outtmpl = "%(artist)s - %(title)s"
+
+# Optional: Path to cookies.txt (Netscape format) for yt-dlp
+# Example: "~/.config/jukebox-fm/cookies.txt"
+cookies = ""
 
 [friends]
 friends_file = "~/.config/jukebox-fm/friends.txt"
