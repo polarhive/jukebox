@@ -1,6 +1,6 @@
 [project]
 name = "jukebox-fm"
-version = "0.5.0"
+version = "0.6.0"
 description = "Play LastFM music recommendations using: mpd, yt-dlp and python"
 keywords = ["mpd", "lastfm", "music", "yt-dlp"]
 readme = "README.md"
@@ -20,7 +20,8 @@ dependencies = [
     "requests>=2.32.5",
     "yt-dlp",
     "toml",
-    "python-mpd2"
+    "python-mpd2",
+    "tqdm",
 ]
 
 [project.urls]

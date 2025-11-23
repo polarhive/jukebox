@@ -1,5 +1,5 @@
-from os import path, makedirs
-from sys import exit
+from os import path, makedirs, devnull, open as os_open, O_WRONLY, dup, dup2
+from sys import exit, stderr
 from time import sleep
 from argparse import ArgumentParser
 from logging import (
@@ -10,6 +10,11 @@ from logging import (
     StreamHandler,
     Formatter,
     getLogger,
+    DEBUG,
+    INFO,
+    WARNING,
+    ERROR,
+    CRITICAL,
 )
 from toml import load, dump
 from mpd import MPDClient
@@ -18,18 +23,20 @@ from subprocess import run
 from shutil import which
 from requests import get, RequestException
 from importlib import metadata
+from tqdm import tqdm
 
 client = MPDClient()
 
 
 def main():
-    args = logger()
+    args = parse_arguments()
     if getattr(args, "version", False) or getattr(args, "v", False):
         print_version_and_exit()
     config_dir = init()
 
     # toml
     config = load_config(path.join(config_dir, "config.toml"))
+    logger(config, args)
     music_folder = path.expanduser(config["music"]["music_folder"])
     username = args.u if args.u else config["lastfm"]["username"]
     mode = args.m if args.m else config["lastfm"]["mode"]
@@ -106,19 +113,46 @@ def main():
         client.disconnect()
 
 
-def logger():
-    args = parse_arguments()
+class ColoredFormatter(Formatter):
+    COLORS = {
+        DEBUG: '\033[36m',      # Cyan
+        INFO: '\033[32m',       # Green
+        WARNING: '\033[33m',    # Yellow
+        ERROR: '\033[31m',      # Red
+        CRITICAL: '\033[35m',   # Magenta
+    }
+    RESET = '\033[0m'
+    BOLD = '\033[1m'
+    
+    def format(self, record):
+        levelname = record.levelname
+        if record.levelno in self.COLORS:
+            record.levelname = f"{self.COLORS[record.levelno]}{self.BOLD}{levelname}{self.RESET}"
+
+        result = super().format(record)
+        record.levelname = levelname
+        return result
+
+
+def logger(config, args):
+    log_file = "/tmp/jukebox-fm.log"
+    try:
+        cfg_log = config.get("logging", {}).get("log_file")
+        if cfg_log:
+            log_file = path.expanduser(cfg_log)
+    except Exception:
+        pass
     basicConfig(
         level=args.l,
         format="%(asctime)s - %(levelname)s - %(message)s",
-        filename="/tmp/jukebox-fm.log",
+        filename=log_file,
         filemode="a",
     )
     console_handler = StreamHandler()
     console_handler.setLevel(args.l)
-    console_handler.setFormatter(Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+    console_handler.setFormatter(ColoredFormatter("%(asctime)s - %(levelname)s - %(message)s"))
     getLogger().addHandler(console_handler)
-    return args
+    info(f"Log file: {log_file}")
 
 
 def parse_arguments():
@@ -210,6 +244,7 @@ def create_default_config(config_path):
             "cookies": "",
         },
         "friends": {"friends_file": "~/.config/jukebox-fm/friends.txt"},
+        "logging": {"log_file": "/tmp/jukebox-fm.log"},
     }
 
     try:
@@ -376,6 +411,16 @@ def configure_ydl(config, music_folder):
     except Exception as e:
         warning(f"Error while processing cookies config: {e}")
 
+    try:
+        remote_components = config.get("yt_dlp", {}).get("remote_components", "")
+        if remote_components:
+            if isinstance(remote_components, str):
+                remote_components = [remote_components]
+            ydl_opts["remote_components"] = remote_components
+            info(f"Using remote components for yt-dlp: {remote_components}")
+    except Exception as e:
+        warning(f"Error while processing remote_components config: {e}")
+
     return ydl_opts
 
 
@@ -389,14 +434,27 @@ def download_loved_tracks(username, music_folder, ydl_config, config=None):
         return
 
     info(f"Starting download of {len(loved_tracks)} loved tracks...")
+    
+    try:
+        library_cache = client.listallinfo()
+        info(f"Library cached: {len(library_cache)} items")
+    except Exception as e:
+        warning(f"Could not cache library: {e}")
+        library_cache = []
 
     for i, (artist, title) in enumerate(loved_tracks, 1):
         info(f"Processing {i}/{len(loved_tracks)}: {artist} - {title}")
+        song_name = f"{artist} - {title}"
 
-        # Check if track is already in library
-        if is_track_in_library(artist, title):
-            queue_song(f"{artist} - {title}")
-            continue
+        # Check if track exists in library and get its file path
+        file_path = is_track_in_library(artist, title, library_cache)
+        if file_path:
+            try:
+                client.add(file_path)
+                info(f"Queued: {song_name}")
+                continue
+            except Exception as e:
+                warning(f"Found in library but couldn't queue '{song_name}': {e}")
 
         # Search for the track on YouTube and download
         download_song(artist, title, music_folder, ydl_config, return_success=True)
@@ -438,9 +496,28 @@ def fetch_lastfm_data(endpoint, music_folder, ydl_config, config=None):
             parsed_tracks = parsed_tracks[:max_tracks]
 
         info(f"Fetched: {len(parsed_tracks)} tracks")
+        
+        # Cache library once at the start
+        try:
+            library_cache = client.listallinfo()
+            info(f"Library cached: {len(library_cache)} items")
+        except Exception as e:
+            warning(f"Could not cache library: {e}")
+            library_cache = []
+        
         for artist, title, playlink_id in parsed_tracks:
-            if is_track_in_library(artist, title):
-                queue_song(f"{artist} - {title}")
+            song_name = f"{artist} - {title}"
+            
+            # Check if track exists in library cache and get its file path
+            file_path = is_track_in_library(artist, title, library_cache)
+            if file_path:
+                # Queue using the actual file path from library
+                try:
+                    client.add(file_path)
+                    info(f"Queued: {song_name}")
+                except Exception as e:
+                    warning(f"Found in library but couldn't queue '{song_name}': {e}")
+                    download_song(artist, title, music_folder, ydl_config, playlink_id)
             else:
                 download_song(artist, title, music_folder, ydl_config, playlink_id)
 
@@ -465,28 +542,52 @@ def parse_tracks(playlist):
     return parsed_tracks
 
 
-def is_track_in_library(artist, title):
-    try:
-        library = client.listallinfo()
-        return any(
-            song["artist"] == artist and song["title"] == title
-            for song in library
-            if "artist" in song and "title" in song
-        )
-    except Exception as e:
-        log_error(f"Could not check library: {e}")
-        return False
+def is_track_in_library(artist, title, library_cache=None):
+    """Check if track exists in library and return its file path if found
+    
+    Returns:
+        str or None: File path if found in library, None otherwise
+    """
+    if library_cache is None:
+        return None
+    
+    for song in library_cache:
+        if "artist" in song and "title" in song and "file" in song:
+            if song["artist"] == artist and song["title"] == title:
+                return song["file"]
+    
+    return None
 
 
-def queue_song(song):
+def queue_song(song, check_only=False):
+    """Queue a song or just check if it can be queued
+    
+    Args:
+        song: Song name in format "Artist - Title"
+        check_only: If True, only check if file exists without queuing
+    
+    Returns:
+        bool: True if song exists and can be queued, False otherwise
+    """
     try:
         client.update("dl")
         sleep(0.1)
+        
+        if check_only:
+            # Just check if the file exists in MPD's database
+            try:
+                result = client.search("filename", f"dl/{song}.opus")
+                return len(result) > 0
+            except:
+                return False
+        
         client.add(f"dl/{song}.opus")
         info(f"Queued: {song}")
         return True
     except Exception as e:
-        log_error(f"Could not queue song '{song}': {e}")
+        # Only log if we were actually trying to queue (not just checking)
+        if not check_only:
+            warning(f"Could not queue '{song}': {e}")
         return False
 
 
@@ -509,6 +610,24 @@ def download_song(
     """
     song = f"{artist} - {title}"
 
+    # Progress bar setup
+    pbar = None
+    
+    def progress_hook(d):
+        nonlocal pbar
+        if d['status'] == 'downloading':
+            if pbar is None:
+                total = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+                pbar = tqdm(total=total, unit='B', unit_scale=True, desc=f"⬇ {song[:50]}", leave=False)
+            downloaded = d.get('downloaded_bytes', 0)
+            if pbar.total and downloaded <= pbar.total:
+                pbar.n = downloaded
+                pbar.refresh()
+        elif d['status'] == 'finished':
+            if pbar:
+                pbar.close()
+                pbar = None
+
     # Determine download URL/search
     if playlink_id:
         url_or_search = f"https://www.youtube.com/watch?v={playlink_id}"
@@ -526,12 +645,32 @@ def download_song(
                 f"artist={artist}",
             ],
             "outtmpl": path.join(music_folder, f"{artist} - {title}"),
+            "no_warnings": True,
+            "ignoreerrors": False,
+            "progress_hooks": [progress_hook],
+            "quiet": True,
+            "no_color": True,
         }
     )
 
     try:
-        with YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url_or_search])
+        # Temporarily redirect stderr to suppress yt-dlp error messages
+        stderr_fd = stderr.fileno()
+        old_stderr = dup(stderr_fd)
+        devnull_fd = os_open(devnull, O_WRONLY)
+        
+        try:
+            dup2(devnull_fd, stderr_fd)
+            with YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url_or_search])
+        finally:
+            # Restore stderr
+            dup2(old_stderr, stderr_fd)
+            makedirs  # Keep import
+        
+        # Ensure progress bar is closed
+        if pbar:
+            pbar.close()
 
         # Queue the song
         queue_success = queue_song(song)
@@ -547,11 +686,16 @@ def download_song(
             pass
 
     except Exception as e:
+        # Extract just the core error message, skip yt-dlp prefix
+        error_msg = str(e)
+        if error_msg.startswith("ERROR: "):
+            error_msg = error_msg[7:]  # Remove "ERROR: " prefix
+        
         if return_success:
-            warning(f"Could not download '{song}': {e}")
+            warning(f"Could not download '{song}': {error_msg}")
             return False
         else:
-            error(f"Could not download song '{song}': {e}")
+            error(f"Could not download song '{song}': {error_msg}")
 
     return None if not return_success else False
 

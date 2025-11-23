@@ -18,6 +18,7 @@ geo_bypass = true
 preferred_quality = "192"
 format = "opus/bestaudio"
 outtmpl = "%(artist)s - %(title)s"
+remote_components = "ejs:github"
 
 # Optional: Path to cookies.txt (Netscape format) for yt-dlp
 # Example: "~/.config/jukebox-fm/cookies.txt"
@@ -25,3 +26,6 @@ cookies = ""
 
 [friends]
 friends_file = "~/.config/jukebox-fm/friends.txt"
+
+[logging]
+log_file = "/tmp/jukebox-fm.log"
