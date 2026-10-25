@@ -9,18 +9,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python
-      uses: actions/setup-python@v5
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v10.3.2
       with:
-        python-version: "3.x"
-    - name: build
-      run: >-
-        python3 -m
-        pip install
-        build
-        --user
+        python-version: "3.13"
     - name: Build a binary wheel and a source tarball
-      run: python3 -m build
+      run: uv build
+    - name: Smoke test the wheel
+      run: uv run --no-project --with dist/*.whl jukebox-fm --version
     - name: Store the distribution packages
       uses: actions/upload-artifact@v4
       with:
