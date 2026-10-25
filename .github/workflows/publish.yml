@@ -2,6 +2,9 @@ name: publish
 
 on: push
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: build
@@ -13,6 +16,14 @@ jobs:
       uses: astral-sh/setup-uv@v10.3.2
       with:
         python-version: "3.13"
+    - name: Check tag matches package version
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        expected="v$(uv version --short)"
+        if [ "$expected" != "$GITHUB_REF_NAME" ]; then
+          echo "::error::Tag $GITHUB_REF_NAME does not match package version $expected"
+          exit 1
+        fi
     - name: Build a binary wheel and a source tarball
       run: uv build
     - name: Smoke test the wheel
@@ -23,12 +34,52 @@ jobs:
         name: python-package-distributions
         path: dist/
 
+  tag:
+    name: tag release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      release: ${{ steps.tag.outputs.release }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v10.3.2
+      with:
+        enable-cache: false
+    - name: Tag the package version
+      id: tag
+      run: |
+        tag="v$(uv version --short)"
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+        # Tags are only created from main; tag pushes are published as-is.
+        if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+          echo "release=false" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+          echo "::notice::$tag already exists; nothing to release."
+          echo "release=false" >> "$GITHUB_OUTPUT"
+        else
+          git tag -a "$tag" -m "$tag"
+          git push origin "$tag"
+          echo "release=true" >> "$GITHUB_OUTPUT"
+        fi
+
   publish-to-pypi:
     name: >-
       publish to pypi
-    if: startsWith(github.ref, 'refs/tags/')  # only publish to PyPI on tag pushes
     needs:
     - build
+    - tag
+    if: github.ref_type == 'tag' || needs.tag.outputs.release == 'true'
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -37,20 +88,31 @@ jobs:
       id-token: write
 
     steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v10.3.2
+      with:
+        enable-cache: false
     - name: Download all the dists
       uses: actions/download-artifact@v4
       with:
         name: python-package-distributions
         path: dist/
+    - name: Generate PEP 740 attestations
+      uses: astral-sh/attest-action@v0.0.7
     - name: Publish distribution to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
+      run: uv publish
 
   github-release:
     name: >-
       sign dists
     needs:
     - publish-to-pypi
+    - tag
+    if: needs.publish-to-pypi.result == 'success'
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ needs.tag.outputs.tag }}
+      GH_REPO: ${{ github.repository }}
 
     permissions:
       contents: write  # IMPORTANT: mandatory for making GitHub Releases
@@ -71,15 +133,13 @@ jobs:
     - name: Create GitHub Release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: >-
-        gh release create
-        '${{ github.ref_name }}'
-        --repo '${{ github.repository }}'
-        --notes ""
+      run: |
+        if gh release view "$TAG" >/dev/null 2>&1; then
+          echo "Release $TAG already exists."
+        else
+          gh release create "$TAG" --target "$GITHUB_SHA" --notes ""
+        fi
     - name: Upload artifact signatures to GitHub Release
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: >-
-        gh release upload
-        '${{ github.ref_name }}' dist/**
-        --repo '${{ github.repository }}'
+      run: gh release upload "$TAG" dist/** --clobber
